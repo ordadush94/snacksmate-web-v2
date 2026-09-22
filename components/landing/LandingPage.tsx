@@ -36,6 +36,9 @@ function smScroll(id: string, evt?: Event) {
 
 function useLandingBehavior(locale: Locale) {
   useEffect(() => {
+    document.documentElement.lang = locale;
+    document.documentElement.dir = locale === "he" ? "rtl" : "ltr";
+    document.body.setAttribute("data-lang", locale);
     setLangPreference(locale);
 
     const abort = new AbortController();

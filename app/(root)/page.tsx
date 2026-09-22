@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function LanguageGatePage() {
   return (
     <>
@@ -15,10 +17,10 @@ export default function LanguageGatePage() {
         }
         a { color: #23201c; }
       `}</style>
-      <a href="/en/">English</a>
-      <a href="/he/" lang="he">
+      <Link href="/en">English</Link>
+      <Link href="/he" lang="he">
         עברית
-      </a>
+      </Link>
     </>
   );
 }
