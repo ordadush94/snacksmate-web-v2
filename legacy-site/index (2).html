@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Snacksmate - Short exercise snacks for your day</title>
+  <meta name="description" content="2-5 minute exercise snacks, no equipment, anywhere. Snacksmate helps you add movement to a busy day - without the gym or a free hour." />
+  <!-- Unfurlers don't run the redirect below, so this page carries /en/'s card. -->
+  <meta property="og:title" content="Snacksmate" />
+  <meta property="og:description" content="Short exercise snacks throughout your day. No equipment. Anywhere. Download now." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://www.snacksmate.com/en/" />
+  <meta property="og:image" content="https://www.snacksmate.com/app-icon.png" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:image" content="https://www.snacksmate.com/app-icon.png" />
+  <meta name="robots" content="noindex,follow" />
+  <link rel="alternate" hreflang="he" href="https://www.snacksmate.com/he/" />
+  <link rel="alternate" hreflang="en" href="https://www.snacksmate.com/en/" />
+  <link rel="alternate" hreflang="x-default" href="https://www.snacksmate.com/en/" />
+  <link rel="icon" href="/favicon.png" sizes="32x32" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <script>
+    (function () {
+      var COOKIE = "snacksmate_lang";
+      var STORAGE_KEY = "snacksmate_landing_lang";
+
+      function stored() {
+        var match = document.cookie.match(
+          new RegExp("(?:^|;\\s*)" + COOKIE + "=(he|en)(?:;|$)")
+        );
+        if (match) return match[1];
+        try {
+          var saved = localStorage.getItem(STORAGE_KEY);
+          if (saved === "he" || saved === "en") return saved;
+        } catch (e) {}
+        return null;
+      }
+
+      function fromBrowser() {
+        var tags = (navigator.languages && navigator.languages.length) ?
+          navigator.languages : [navigator.language];
+        for (var i = 0; i < tags.length; i++) {
+          var tag = String(tags[i] || "").toLowerCase();
+          if (tag === "he" || tag.indexOf("he-") === 0) return "he";
+        }
+        return "en";
+      }
+
+      // Trailing slash: Hosting 301s /en to /en/, so land there directly.
+      var lang = stored() || fromBrowser();
+      location.replace("/" + lang + "/" + location.search + location.hash);
+    })();
+  </script>
+  <noscript><meta http-equiv="refresh" content="0;url=/en/" /></noscript>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      font: 500 17px/1.4 system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+      background: #fffaf2;
+      color: #23201c;
+    }
+    a { color: #23201c; }
+  </style>
+</head>
+<body>
+  <a href="/en/">English</a>
+  <a href="/he/" lang="he">עברית</a>
+</body>
+</html>
