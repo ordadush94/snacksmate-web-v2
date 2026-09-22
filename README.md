@@ -2,17 +2,11 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Sanity
 
-This app is wired for [Sanity](https://www.sanity.io) the same way `npx sanity@latest init` sets up an existing Next.js project: embedded Studio at `/studio`, a configured client, and schema/config files in the repo.
+This app is connected to the Snacksmate [Sanity](https://www.sanity.io) project (`8wc8eouj`, dataset `production`). Embedded Studio lives at `/studio`. Manage the project at [sanity.io/manage/project/8wc8eouj](https://www.sanity.io/manage/project/8wc8eouj).
 
-Connect a Sanity project before running the Studio:
+`npx sanity@latest init` created the cloud project, wrote local env vars, and allowed `http://localhost:3000` CORS with credentials.
 
-1. Create a free project at [sanity.io/manage](https://www.sanity.io/manage) (or log in with `npx sanity@latest login`).
-2. Copy `.env.example` to `.env.local` and set `NEXT_PUBLIC_SANITY_PROJECT_ID` and `NEXT_PUBLIC_SANITY_DATASET`.
-3. Allow the local origin: `npx sanity@latest cors add http://localhost:3000 --credentials`
-
-Then start the app and open [http://localhost:3000/studio](http://localhost:3000/studio).
-
-If you already have Sanity CLI credentials locally, you can also re-run `npx sanity@latest init` in this folder to attach a project and write env vars automatically.
+To run Studio locally, copy `.env.example` to `.env.local` if you do not already have one, then start the app and open [http://localhost:3000/studio](http://localhost:3000/studio).
 
 ## Getting Started
 
