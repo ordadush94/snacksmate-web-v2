@@ -1,27 +1,45 @@
 import Link from "next/link";
 import type { Locale } from "@/content/types";
 import {
+  articlePath,
   articlesPath,
   formatArticleDate,
   getArticlesCopy,
   topicLabel,
 } from "@/content/articles";
 import {
+  articleCanonicalUrl,
+  articleJsonLd,
+  breadcrumbJsonLd,
+} from "@/lib/article-seo";
+import { absoluteUrl } from "@/lib/site";
+import {
   articleImageAlt,
   articleImageUrl,
   type Article,
+  type ArticleListItem,
 } from "@/sanity/lib/articles";
 import { ArticlePortableText } from "./ArticlePortableText";
+import { JsonLd } from "./JsonLd";
 
 type ArticleDetailProps = {
   article: Article;
   locale: Locale;
+  related: ArticleListItem[];
 };
 
-export function ArticleDetail({ article, locale }: ArticleDetailProps) {
+export function ArticleDetail({
+  article,
+  locale,
+  related,
+}: ArticleDetailProps) {
   const copy = getArticlesCopy(locale);
   const topic = topicLabel(article.topic, locale);
   const imageUrl = articleImageUrl(article.mainImage, 1400);
+  const canonicalUrl = articleCanonicalUrl(locale, article);
+  const homeUrl = absoluteUrl(`/${locale}/`);
+  const articlesUrl = absoluteUrl(articlesPath(locale));
+  const description = article.excerpt?.trim() || article.seoDescription?.trim();
   const references = article.references?.filter(
     (reference) =>
       reference.title ||
@@ -33,10 +51,45 @@ export function ArticleDetail({ article, locale }: ArticleDetailProps) {
 
   return (
     <article className="article-page">
+      <JsonLd
+        data={[
+          articleJsonLd({
+            locale,
+            title: article.title,
+            description,
+            imageUrl: articleImageUrl(article.mainImage, 1600),
+            author: article.author,
+            publishedAt: article.publishedAt,
+            updatedAt: article.updatedAt,
+            canonicalUrl,
+          }),
+          breadcrumbJsonLd([
+            { name: copy.homeLabel, url: homeUrl },
+            { name: copy.navLabel, url: articlesUrl },
+            { name: article.title, url: canonicalUrl },
+          ]),
+        ]}
+      />
       <div className="article-reading">
-        <p className="article-back">
-          <Link href={articlesPath(locale)}>{copy.backToArticles}</Link>
-        </p>
+        <nav className="article-breadcrumbs" aria-label={copy.breadcrumbLabel}>
+          <ol>
+            <li>
+              <Link href={`/${locale}/`}>{copy.homeLabel}</Link>
+            </li>
+            <li>
+              <span aria-hidden="true" className="article-breadcrumb-sep">
+                &gt;
+              </span>
+              <Link href={articlesPath(locale)}>{copy.navLabel}</Link>
+            </li>
+            <li>
+              <span aria-hidden="true" className="article-breadcrumb-sep">
+                &gt;
+              </span>
+              <span aria-current="page">{article.title}</span>
+            </li>
+          </ol>
+        </nav>
         {topic ? <p className="section-kicker">{topic}</p> : null}
         <h1>{article.title}</h1>
         {article.excerpt ? <p className="lede">{article.excerpt}</p> : null}
@@ -112,6 +165,29 @@ export function ArticleDetail({ article, locale }: ArticleDetailProps) {
                 );
               })}
             </ol>
+          </section>
+        ) : null}
+        {related.length > 0 ? (
+          <section className="article-related" aria-labelledby="more-articles">
+            <h2 id="more-articles">{copy.relatedHeading}</h2>
+            <ul>
+              {related.map((item) => {
+                const itemTopic = topicLabel(item.topic, locale);
+                return (
+                  <li key={item._id}>
+                    {itemTopic ? (
+                      <p className="section-kicker">{itemTopic}</p>
+                    ) : null}
+                    <Link href={articlePath(locale, item.slug)}>{item.title}</Link>
+                    {item.publishedAt ? (
+                      <time dateTime={item.publishedAt}>
+                        {formatArticleDate(item.publishedAt, locale)}
+                      </time>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
           </section>
         ) : null}
       </div>

@@ -33,6 +33,7 @@ export const articleByLanguageAndSlugQuery = groq`
     seoTitle,
     seoDescription,
     canonicalUrl,
+    translationSlug,
     body,
     references[] {
       _key,
@@ -49,5 +50,39 @@ export const publishedArticleParamsQuery = groq`
   *[_type == "article" && defined(slug.current) && defined(language) && !(_id in path("drafts.**"))] {
     "slug": slug.current,
     language
+  }
+`;
+
+export const publishedArticlesSitemapQuery = groq`
+  *[_type == "article" && defined(slug.current) && defined(language) && !(_id in path("drafts.**"))] {
+    "slug": slug.current,
+    language,
+    publishedAt,
+    updatedAt,
+    canonicalUrl,
+    translationSlug
+  }
+`;
+
+export const articleTranslationQuery = groq`
+  *[
+    _type == "article" &&
+    language == $language &&
+    defined(slug.current) &&
+    !(_id in path("drafts.**")) &&
+    (
+      slug.current == $translationSlug ||
+      translationSlug == $translationSlug ||
+      translationSlug == $slug
+    )
+  ] | order(select(
+    slug.current == $translationSlug => 0,
+    translationSlug == $translationSlug => 1,
+    2
+  ) asc)[0] {
+    "slug": slug.current,
+    language,
+    canonicalUrl,
+    translationSlug
   }
 `;

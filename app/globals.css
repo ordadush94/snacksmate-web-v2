@@ -651,8 +651,20 @@ footer a { text-decoration: underline; text-underline-offset: 3px; }
   margin-bottom: 28px;
 }
 .articles-empty {
-  margin: 0;
+  margin: 8px 0 0;
+  padding: 28px 0 8px;
   color: var(--ink-soft);
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 .article-list {
   display: grid;
@@ -704,18 +716,39 @@ footer a { text-decoration: underline; text-underline-offset: 3px; }
   text-decoration: underline;
   text-underline-offset: 3px;
 }
-.article-back {
-  margin: 0 0 22px;
-  font-size: 0.95rem;
-  font-weight: 700;
+.article-breadcrumbs {
+  margin: 0 0 18px;
+  font-size: 0.92rem;
 }
-.article-back a {
+.article-breadcrumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.article-breadcrumbs li {
+  display: inline-flex;
+  align-items: baseline;
+  min-width: 0;
+}
+.article-breadcrumbs a {
   color: var(--mint-deep);
+  font-weight: 700;
   text-decoration: none;
 }
-.article-back a:hover {
+.article-breadcrumbs a:hover {
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+.article-breadcrumb-sep {
+  margin-inline: 0.45em;
+  color: var(--ink-soft);
+}
+.article-breadcrumbs [aria-current="page"] {
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
 }
 .article-page .lede {
   margin: 0 0 16px;
@@ -779,6 +812,34 @@ footer a { text-decoration: underline; text-underline-offset: 3px; }
   text-underline-offset: 3px;
 }
 .article-references span {
+  display: block;
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+}
+.article-related {
+  margin-top: 48px;
+  padding: 28px 0 0;
+  border-top: 1px solid var(--line);
+}
+.article-related h2 {
+  font-size: 1.35rem;
+}
+.article-related ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.article-related li {
+  margin: 0 0 18px;
+}
+.article-related a {
+  font-weight: 700;
+  text-decoration: none;
+}
+.article-related a:hover {
+  color: var(--mint-deep);
+}
+.article-related time {
   display: block;
   color: var(--ink-soft);
   font-size: 0.95rem;

@@ -1,12 +1,18 @@
 import type { Metadata } from "next";
 import type { LandingContent, Locale } from "@/content/types";
-import { articlePath, articlesPath, getArticlesCopy } from "@/content/articles";
-import { APPLE_APP_ID, SITE_URL } from "@/lib/site";
+import { articlesPath, getArticlesCopy } from "@/content/articles";
+import {
+  articleCanonicalUrl,
+  articleHreflangLanguages,
+  type ArticleSeoIdentity,
+} from "@/lib/article-seo";
+import { absoluteUrl, APPLE_APP_ID, SITE_URL } from "@/lib/site";
 import { enContent } from "@/content/en";
 import {
   articleImageAlt,
   articleImageUrl,
   type Article,
+  type ArticleTranslation,
 } from "@/sanity/lib/articles";
 
 export const iconMetadata: Metadata["icons"] = {
@@ -50,26 +56,32 @@ export function createLocaleMetadata(content: LandingContent): Metadata {
 
 export function createArticlesIndexMetadata(locale: Locale): Metadata {
   const copy = getArticlesCopy(locale);
-  const path = articlesPath(locale);
+  const canonical = absoluteUrl(articlesPath(locale));
   return {
     title: copy.metaTitle,
-    description: copy.pageDescription,
+    description: copy.metaDescription,
+    robots: {
+      index: true,
+      follow: true,
+    },
     alternates: {
-      canonical: path,
+      canonical,
       languages: {
-        en: articlesPath("en"),
-        he: articlesPath("he"),
-        "x-default": articlesPath("en"),
+        en: absoluteUrl(articlesPath("en")),
+        he: absoluteUrl(articlesPath("he")),
+        "x-default": absoluteUrl(articlesPath("en")),
       },
     },
     openGraph: {
-      title: copy.pageTitle,
-      description: copy.pageDescription,
+      title: copy.metaTitle,
+      description: copy.metaDescription,
       type: "website",
-      url: path,
+      url: canonical,
     },
     twitter: {
       card: "summary",
+      title: copy.metaTitle,
+      description: copy.metaDescription,
     },
   };
 }
@@ -77,18 +89,37 @@ export function createArticlesIndexMetadata(locale: Locale): Metadata {
 export function createArticleMetadata(
   locale: Locale,
   article: Article,
+  translation?: ArticleTranslation | null,
 ): Metadata {
-  const path = articlePath(locale, article.slug);
   const title = article.seoTitle?.trim() || article.title;
   const description = article.seoDescription?.trim() || article.excerpt;
-  const canonical = article.canonicalUrl?.trim() || path;
+  const canonical = articleCanonicalUrl(locale, article);
   const imageUrl = articleImageUrl(article.mainImage, 1200, 630);
+  const identity: ArticleSeoIdentity = {
+    slug: article.slug,
+    language: locale,
+    canonicalUrl: article.canonicalUrl,
+    translationSlug: article.translationSlug,
+  };
+  const translationIdentity: ArticleSeoIdentity | null = translation
+    ? {
+        slug: translation.slug,
+        language: translation.language,
+        canonicalUrl: translation.canonicalUrl,
+        translationSlug: translation.translationSlug,
+      }
+    : null;
 
   return {
     title,
     description,
+    robots: {
+      index: true,
+      follow: true,
+    },
     alternates: {
       canonical,
+      languages: articleHreflangLanguages(identity, translationIdentity),
     },
     openGraph: {
       title,
