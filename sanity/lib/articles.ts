@@ -2,13 +2,15 @@ import { cache } from "react";
 import type { PortableTextBlock } from "@portabletext/types";
 import type { SanityImageSource } from "@sanity/image-url";
 
-import type { Locale } from "@/content/types";
+import { isLocale, type Locale } from "@/content/types";
 import { client } from "./client";
 import { urlFor } from "./image";
 import {
   articleByLanguageAndSlugQuery,
+  articleTranslationQuery,
   articlesByLanguageQuery,
   publishedArticleParamsQuery,
+  publishedArticlesSitemapQuery,
 } from "./queries";
 
 export const ARTICLES_REVALIDATE_SECONDS = 60;
@@ -54,6 +56,23 @@ export type ArticleListItem = {
 export type Article = ArticleListItem & {
   body?: PortableTextBlock[] | null;
   references?: ArticleReference[] | null;
+  translationSlug?: string;
+};
+
+export type ArticleTranslation = {
+  slug: string;
+  language: Locale;
+  canonicalUrl?: string;
+  translationSlug?: string;
+};
+
+export type SitemapArticle = {
+  slug: string;
+  language: Locale;
+  publishedAt?: string;
+  updatedAt?: string;
+  canonicalUrl?: string;
+  translationSlug?: string;
 };
 
 export type PublishedArticleParams = {
@@ -113,3 +132,54 @@ export const getPublishedArticleParams = cache(async () => {
     publishedFetchOptions,
   );
 });
+
+export const getPublishedArticlesForSitemap = cache(async () => {
+  return client.fetch<SitemapArticle[]>(
+    publishedArticlesSitemapQuery,
+    {},
+    publishedFetchOptions,
+  );
+});
+
+export const getArticleTranslation = cache(
+  async (language: Locale, slug: string, translationSlug: string) => {
+    const key = translationSlug.trim();
+    if (!key) return null;
+
+    const translation = await client.fetch<ArticleTranslation | null>(
+      articleTranslationQuery,
+      {
+        language: language === "en" ? "he" : "en",
+        slug,
+        translationSlug: key,
+      },
+      publishedFetchOptions,
+    );
+
+    if (
+      !translation?.slug?.trim() ||
+      !isLocale(translation.language) ||
+      translation.language === language
+    ) {
+      return null;
+    }
+
+    return translation;
+  },
+);
+
+export function pickRelatedArticles(
+  articles: ArticleListItem[],
+  current: { _id: string; slug: string; topic?: string },
+  limit = 3,
+): ArticleListItem[] {
+  const others = articles.filter(
+    (article) => article._id !== current._id && article.slug !== current.slug,
+  );
+  const topic = current.topic?.trim();
+  if (!topic) return others.slice(0, limit);
+
+  const sameTopic = others.filter((article) => article.topic === topic);
+  const otherTopics = others.filter((article) => article.topic !== topic);
+  return [...sameTopic, ...otherTopics].slice(0, limit);
+}

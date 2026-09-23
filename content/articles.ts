@@ -21,7 +21,12 @@ export const articlesCopy = {
     updatedLabel: "Updated",
     referencesHeading: "References",
     backToArticles: "All articles",
-    metaTitle: "Articles | Snacksmate",
+    homeLabel: "Home",
+    breadcrumbLabel: "Breadcrumb",
+    relatedHeading: "More from Snacksmate",
+    metaTitle: "Snacksmate Articles – Exercise Snacks, Research & Active Living",
+    metaDescription:
+      "Articles from Snacksmate on exercise snacks, movement research, and active living — short ways to move more through a busy day.",
   },
   he: {
     navLabel: "כתבות",
@@ -34,7 +39,12 @@ export const articlesCopy = {
     updatedLabel: "עודכן",
     referencesHeading: "מקורות",
     backToArticles: "לכל הכתבות",
-    metaTitle: "כתבות | Snacksmate",
+    homeLabel: "בית",
+    breadcrumbLabel: "נתיב ניווט",
+    relatedHeading: "כתבות נוספות",
+    metaTitle: "כתבות Snacksmate – נשנושי כושר, מחקרים ואורח חיים פעיל",
+    metaDescription:
+      "כתבות Snacksmate על נשנושי כושר, מחקרי תנועה ואורח חיים פעיל — דרכים קצרות להוסיף תנועה ליום העמוס.",
   },
 } as const;
 

@@ -5,7 +5,10 @@ import { ArticleDetail } from "@/components/articles/ArticleDetail";
 import { createArticleMetadata } from "@/lib/metadata";
 import {
   getArticleByLanguageAndSlug,
+  getArticleTranslation,
+  getArticlesByLanguage,
   getPublishedArticleParams,
+  pickRelatedArticles,
 } from "@/sanity/lib/articles";
 
 export const revalidate = 60;
@@ -29,7 +32,12 @@ export async function generateMetadata({
 
   const article = await getArticleByLanguageAndSlug(lang, slug);
   if (!article) notFound();
-  return createArticleMetadata(lang, article);
+
+  const translationKey = article.translationSlug?.trim();
+  const translation = translationKey
+    ? await getArticleTranslation(lang, slug, translationKey)
+    : null;
+  return createArticleMetadata(lang, article, translation);
 }
 
 export default async function ArticlePage({
@@ -41,5 +49,8 @@ export default async function ArticlePage({
   const article = await getArticleByLanguageAndSlug(lang, slug);
   if (!article) notFound();
 
-  return <ArticleDetail article={article} locale={lang} />;
+  const articles = await getArticlesByLanguage(lang);
+  const related = pickRelatedArticles(articles, article);
+
+  return <ArticleDetail article={article} locale={lang} related={related} />;
 }

@@ -1,4 +1,10 @@
 export const SITE_URL = "https://www.snacksmate.com";
+
+export function absoluteUrl(path: string): string {
+  if (/^https?:\/\//i.test(path)) return path;
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  return new URL(normalized, SITE_URL).toString();
+}
 export const BRAND_NAME = "Snacksmate";
 export const GA_MEASUREMENT_ID = "G-M5N9063WNQ";
 export const APPLE_APP_ID = "6755204941";

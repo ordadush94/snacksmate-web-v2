@@ -49,6 +49,7 @@ export function ArticleCard({ article, locale }: ArticleCardProps) {
         </p>
         <Link className="article-read-link" href={href}>
           {copy.readArticle}
+          <span className="sr-only">: {article.title}</span>
         </Link>
       </div>
     </article>

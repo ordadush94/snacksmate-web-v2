@@ -19,7 +19,9 @@ export function ArticlesIndex({ locale, articles }: ArticlesIndexProps) {
         <p className="section-lead">{copy.pageDescription}</p>
       </header>
       {articles.length === 0 ? (
-        <p className="articles-empty">{copy.empty}</p>
+        <p className="articles-empty" role="status">
+          {copy.empty}
+        </p>
       ) : (
         <div className="article-list">
           {articles.map((article) => (
