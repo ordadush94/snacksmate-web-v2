@@ -43,7 +43,7 @@ function publishedTimestamp(item: DatedSitemapItem): number {
   return Number.isNaN(time) ? 0 : time;
 }
 
-function groupByLanguage<T extends { language: Locale; slug: string }>(
+function groupByLanguage<T extends DatedSitemapItem & { language: Locale; slug: string }>(
   items: T[],
 ): Record<Locale, T[]> {
   return Object.fromEntries(

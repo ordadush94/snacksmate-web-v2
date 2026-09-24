@@ -74,16 +74,28 @@ export function ResearchDetail({
       reference.doi ||
       reference.year,
   );
-  const overview = [
-    authors?.length ? { label: copy.studyAuthorsLabel, value: authors.join(", ") } : null,
-    population ? { label: copy.populationLabel, value: population } : null,
-    typeof research.sampleSize === "number"
-      ? { label: copy.sampleSizeLabel, value: String(research.sampleSize) }
-      : null,
-    duration ? { label: copy.durationLabel, value: duration } : null,
-    comparator ? { label: copy.comparatorLabel, value: comparator } : null,
-    outcomes?.length ? { label: copy.outcomesLabel, value: outcomes.join(" · ") } : null,
-  ].filter((row): row is { label: string; value: string } => Boolean(row));
+  const overviewRows: { label: string; value: string }[] = [];
+  if (authors?.length) {
+    overviewRows.push({ label: copy.studyAuthorsLabel, value: authors.join(", ") });
+  }
+  if (population) {
+    overviewRows.push({ label: copy.populationLabel, value: population });
+  }
+  if (typeof research.sampleSize === "number") {
+    overviewRows.push({
+      label: copy.sampleSizeLabel,
+      value: String(research.sampleSize),
+    });
+  }
+  if (duration) {
+    overviewRows.push({ label: copy.durationLabel, value: duration });
+  }
+  if (comparator) {
+    overviewRows.push({ label: copy.comparatorLabel, value: comparator });
+  }
+  if (outcomes?.length) {
+    overviewRows.push({ label: copy.outcomesLabel, value: outcomes.join(" · ") });
+  }
   const metaChips = [
     journal,
     research.year,
@@ -182,11 +194,11 @@ export function ResearchDetail({
             />
           </figure>
         ) : null}
-        {overview.length > 0 ? (
+        {overviewRows.length > 0 ? (
           <section className="research-overview" aria-labelledby="study-overview">
             <h2 id="study-overview">{copy.studyOverviewHeading}</h2>
             <dl>
-              {overview.map((row) => (
+              {overviewRows.map((row) => (
                 <div key={row.label} className="research-overview-row">
                   <dt>{row.label}</dt>
                   <dd>{row.value}</dd>
