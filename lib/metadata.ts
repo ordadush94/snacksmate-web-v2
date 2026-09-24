@@ -1,11 +1,17 @@
 import type { Metadata } from "next";
 import type { LandingContent, Locale } from "@/content/types";
 import { articlesPath, getArticlesCopy } from "@/content/articles";
+import { getResearchCopy, researchPath } from "@/content/research";
 import {
   articleCanonicalUrl,
   articleHreflangLanguages,
   type ArticleSeoIdentity,
 } from "@/lib/article-seo";
+import {
+  researchCanonicalUrl,
+  researchHreflangLanguages,
+  type ResearchSeoIdentity,
+} from "@/lib/research-seo";
 import { absoluteUrl, APPLE_APP_ID, SITE_URL } from "@/lib/site";
 import { enContent } from "@/content/en";
 import {
@@ -14,6 +20,12 @@ import {
   type Article,
   type ArticleTranslation,
 } from "@/sanity/lib/articles";
+import {
+  researchImageAlt,
+  researchImageUrl,
+  type Research,
+  type ResearchTranslation,
+} from "@/sanity/lib/research";
 
 export const iconMetadata: Metadata["icons"] = {
   icon: [{ url: "/favicon.png", sizes: "32x32", type: "image/png" }],
@@ -133,6 +145,98 @@ export function createArticleMetadata(
             {
               url: imageUrl,
               alt: articleImageAlt(article.mainImage, article.title),
+            },
+          ]
+        : undefined,
+    },
+    twitter: {
+      card: imageUrl ? "summary_large_image" : "summary",
+      title,
+      description,
+      images: imageUrl ? [imageUrl] : undefined,
+    },
+  };
+}
+
+export function createResearchIndexMetadata(locale: Locale): Metadata {
+  const copy = getResearchCopy(locale);
+  const canonical = absoluteUrl(researchPath(locale));
+  return {
+    title: copy.metaTitle,
+    description: copy.metaDescription,
+    robots: {
+      index: true,
+      follow: true,
+    },
+    alternates: {
+      canonical,
+      languages: {
+        en: absoluteUrl(researchPath("en")),
+        he: absoluteUrl(researchPath("he")),
+        "x-default": absoluteUrl(researchPath("en")),
+      },
+    },
+    openGraph: {
+      title: copy.metaTitle,
+      description: copy.metaDescription,
+      type: "website",
+      url: canonical,
+    },
+    twitter: {
+      card: "summary",
+      title: copy.metaTitle,
+      description: copy.metaDescription,
+    },
+  };
+}
+
+export function createResearchMetadata(
+  locale: Locale,
+  research: Research,
+  translation?: ResearchTranslation | null,
+): Metadata {
+  const title = research.seoTitle?.trim() || research.title;
+  const description = research.seoDescription?.trim() || research.excerpt;
+  const canonical = researchCanonicalUrl(locale, research);
+  const imageUrl = researchImageUrl(research.mainImage, 1200, 630);
+  const identity: ResearchSeoIdentity = {
+    slug: research.slug,
+    language: locale,
+    canonicalUrl: research.canonicalUrl,
+    translationSlug: research.translationSlug,
+  };
+  const translationIdentity: ResearchSeoIdentity | null = translation
+    ? {
+        slug: translation.slug,
+        language: translation.language,
+        canonicalUrl: translation.canonicalUrl,
+        translationSlug: translation.translationSlug,
+      }
+    : null;
+
+  return {
+    title,
+    description,
+    robots: {
+      index: true,
+      follow: true,
+    },
+    alternates: {
+      canonical,
+      languages: researchHreflangLanguages(identity, translationIdentity),
+    },
+    openGraph: {
+      title,
+      description,
+      type: "article",
+      url: canonical,
+      publishedTime: research.publishedAt,
+      modifiedTime: research.updatedAt || undefined,
+      images: imageUrl
+        ? [
+            {
+              url: imageUrl,
+              alt: researchImageAlt(research.mainImage, research.title),
             },
           ]
         : undefined,

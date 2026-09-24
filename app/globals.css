@@ -64,6 +64,11 @@ a { color: inherit; }
   align-items: center;
   gap: 16px;
 }
+.topbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
 .topbar-nav-link {
   text-decoration: none;
   font-weight: 700;
@@ -839,10 +844,183 @@ footer a { text-decoration: underline; text-underline-offset: 3px; }
 .article-related a:hover {
   color: var(--mint-deep);
 }
-.article-related time {
+.article-related time,
+.article-related span {
   display: block;
   color: var(--ink-soft);
   font-size: 0.95rem;
+}
+
+.research-shell,
+.research-reading {
+  width: min(100% - 40px, 800px);
+  margin-inline: auto;
+  padding: 36px 0 88px;
+}
+.research-header h1,
+.research-page h1 {
+  margin: 0 0 14px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(1.7rem, 4vw, 2.4rem);
+  line-height: 1.18;
+  letter-spacing: -0.02em;
+}
+.research-header .section-lead {
+  margin-bottom: 28px;
+  max-width: 52ch;
+}
+.research-filters {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 32px;
+}
+.research-filter {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.research-filter span {
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.research-filter input,
+.research-filter select {
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1.5px solid rgba(20, 32, 28, 0.14);
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+.research-filter input:focus,
+.research-filter select:focus {
+  outline: 2px solid rgba(15, 159, 114, 0.35);
+  outline-offset: 1px;
+  border-color: var(--mint-deep);
+}
+.research-list {
+  display: grid;
+  gap: 22px;
+}
+.research-card {
+  padding: 22px 22px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.72);
+}
+.research-card h2 {
+  margin: 0 0 8px;
+  font-size: clamp(1.2rem, 2.4vw, 1.45rem);
+}
+.research-card h2 a {
+  text-decoration: none;
+}
+.research-card h2 a:hover {
+  color: var(--mint-deep);
+}
+.research-card-chips,
+.research-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.research-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(36, 220, 157, 0.12);
+  color: #0b5c43;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.research-page .lede {
+  margin: 0 0 16px;
+  color: var(--ink-soft);
+  font-size: 1.08rem;
+}
+.research-overview {
+  margin: 8px 0 32px;
+  padding: 20px 22px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.74);
+}
+.research-overview h2,
+.research-section h2,
+.research-original h2 {
+  font-size: 1.28rem;
+}
+.research-overview dl {
+  margin: 0;
+}
+.research-overview-row {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 11rem) 1fr;
+  gap: 4px 16px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.research-overview-row:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+.research-overview dt {
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+.research-overview dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.research-section {
+  margin: 0 0 32px;
+}
+.research-interpretation {
+  padding: 22px 22px 10px;
+  border-radius: var(--radius);
+  background: rgba(36, 220, 157, 0.08);
+  border: 1px solid rgba(15, 159, 114, 0.16);
+}
+.research-interpretation-note {
+  margin: -6px 0 14px;
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+}
+.research-original {
+  margin-top: 36px;
+  padding-top: 28px;
+  border-top: 1px solid var(--line);
+}
+.research-original-link {
+  margin-top: 4px;
+}
+@media (min-width: 720px) {
+  .research-filters {
+    grid-template-columns: 1.3fr 1fr 1fr 0.7fr;
+    align-items: end;
+  }
+}
+@media (max-width: 600px) {
+  .topbar-actions { gap: 10px; }
+  .topbar-nav { gap: 10px; }
+  .topbar-nav-link { font-size: 0.86rem; }
+  .research-overview-row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .research-card {
+    padding: 18px 16px 16px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
