@@ -3,6 +3,7 @@ import { XMLParser } from "fast-xml-parser";
 import {
   extractSampleSize,
   inferStudyDesign,
+  inferStudyDesignFromTitle,
   publicationDate,
   publicationYear,
   type StudyDesign,
@@ -193,6 +194,8 @@ const xmlParser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: "@_",
   trimValues: true,
+  processEntities: true,
+  htmlEntities: true,
   isArray: (name) =>
     [
       "PubmedArticle",
@@ -277,7 +280,9 @@ function parseArticle(article: unknown): PubmedRecord | null {
     }),
     doi,
     publicationTypes,
-    studyDesign: inferStudyDesign(publicationTypes),
+    studyDesign:
+      inferStudyDesignFromTitle(textContent(articleNode.ArticleTitle)) ??
+      inferStudyDesign(publicationTypes),
     sampleSize: extractSampleSize(abstractSections),
   };
 }
@@ -343,14 +348,29 @@ function stripInlineMarkup(xml: string): string {
 }
 
 function textContent(value: unknown): string {
-  if (typeof value === "string" || typeof value === "number") return String(value).trim();
+  if (typeof value === "string" || typeof value === "number") {
+    return decodeXmlEntities(String(value)).trim();
+  }
   if (Array.isArray(value)) return value.map(textContent).filter(Boolean).join(" ").trim();
   const record = asRecord(value);
   if (!record) return "";
   if (typeof record["#text"] === "string" || typeof record["#text"] === "number") {
-    return String(record["#text"]).trim();
+    return decodeXmlEntities(String(record["#text"])).trim();
   }
   return "";
+}
+
+export function decodeXmlEntities(value: string): string {
+  return value
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) =>
+      String.fromCodePoint(Number.parseInt(hex, 16)),
+    )
+    .replace(/&#(\d+);/g, (_, num: string) => String.fromCodePoint(Number(num)))
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
 }
 
 function stringAttr(record: Record<string, unknown> | null, key: string): string | undefined {

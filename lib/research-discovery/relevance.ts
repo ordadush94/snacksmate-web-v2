@@ -57,12 +57,16 @@ export const RELEVANCE_RULES: readonly RelevanceRule[] = [
   },
 ];
 
+function withoutFoodSnackContext(value: string): string {
+  return value.replace(/\b(?:pre|post)[\s-]*exercise[\s-]+snack(?:s|ing)?\b/gi, " ");
+}
+
 export function assessRelevance(
   title: string | null | undefined,
   abstract: string | null | undefined,
 ): RelevanceDecision {
   const haystack = [title, abstract]
-    .map((part) => part?.trim() ?? "")
+    .map((part) => withoutFoodSnackContext(part ?? "").trim())
     .filter(Boolean)
     .join("\n");
 

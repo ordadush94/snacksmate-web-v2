@@ -33,4 +33,10 @@ test("rejects uncertain records instead of creating weak drafts", () => {
 
   const empty = assessRelevance("  ", "");
   assert.equal(empty.accept, false);
+
+  const foodSnack = assessRelevance(
+    "Pre-Exercise Snacking and hunger during a fast",
+    "Participants ate a snack before exercise.",
+  );
+  assert.equal(foodSnack.accept, false);
 });

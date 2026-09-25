@@ -7,7 +7,18 @@ const PUBLICATION_TYPE_PRIORITY = [
 ] as const;
 
 export type StudyDesign =
-  (typeof PUBLICATION_TYPE_PRIORITY)[number][1];
+  | (typeof PUBLICATION_TYPE_PRIORITY)[number][1]
+  | "crossover-study";
+
+export function inferStudyDesignFromTitle(title: string): StudyDesign | undefined {
+  if (/\bcross-?over(?:\s+(?:study|trial))?\b/i.test(title)) return "crossover-study";
+  if (/\brandomi[sz]ed\s+controlled\s+trials?\b/i.test(title)) {
+    return "randomized-controlled-trial";
+  }
+  if (/\bmeta-analysis\b/i.test(title)) return "meta-analysis";
+  if (/\bsystematic\s+reviews?\b/i.test(title)) return "systematic-review";
+  return undefined;
+}
 
 const SAMPLE_SIZE_LABEL = /^(participants?|subjects?|patients?|methods?|sample)$/i;
 const SAMPLE_SIZE_PATTERN = /\b(?:n\s*=\s*|sample size of\s+)(\d{1,6})\b/gi;
