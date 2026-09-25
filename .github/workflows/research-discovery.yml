@@ -1,0 +1,55 @@
+name: Research Discovery
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Check for new studies without creating Sanity drafts
+        type: boolean
+        default: true
+      lookback_days:
+        description: Days of newly indexed PubMed records to search
+        type: string
+        required: false
+        default: "14"
+  schedule:
+    # Twice a week. Scheduled runs create Sanity drafts only; they do not publish.
+    - cron: "0 8 * * 1,4"
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    name: Discover research drafts
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run research discovery
+        env:
+          SANITY_WRITE_TOKEN: ${{ secrets.SANITY_WRITE_TOKEN }}
+          NCBI_CONTACT_EMAIL: ${{ secrets.NCBI_CONTACT_EMAIL }}
+          NCBI_API_KEY: ${{ secrets.NCBI_API_KEY }}
+          NEXT_PUBLIC_SANITY_PROJECT_ID: 8wc8eouj
+          NEXT_PUBLIC_SANITY_DATASET: production
+          NEXT_PUBLIC_SANITY_API_VERSION: "2026-09-22"
+          RESEARCH_LOOKBACK_DAYS: ${{ github.event.inputs.lookback_days || '14' }}
+          DISCOVERY_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run && 'true' || 'false' }}
+        run: |
+          if [ "$DISCOVERY_DRY_RUN" = "true" ]; then
+            npm run research:discover -- --dry-run
+          else
+            npm run research:discover
+          fi
