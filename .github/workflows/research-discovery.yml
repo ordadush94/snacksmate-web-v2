@@ -1,10 +1,13 @@
 name: Research Discovery
 
+# SAFETY: every scheduled run is dry-run only and must not create or modify Sanity documents.
+# A real draft-creation run is possible only from workflow_dispatch when "dry_run" is explicitly false.
+# The manual dry-run input defaults to true.
 on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: Check for new studies without creating Sanity drafts
+        description: Dry run only. Leave this checked. Uncheck only to create Sanity drafts manually.
         type: boolean
         default: true
       lookback_days:
@@ -13,7 +16,7 @@ on:
         required: false
         default: "14"
   schedule:
-    # Twice a week. Scheduled runs create Sanity drafts only; they do not publish.
+    # Monday and Thursday 08:00 UTC. These runs always pass --dry-run.
     - cron: "0 8 * * 1,4"
 
 permissions:
@@ -46,10 +49,16 @@ jobs:
           NEXT_PUBLIC_SANITY_DATASET: production
           NEXT_PUBLIC_SANITY_API_VERSION: "2026-09-22"
           RESEARCH_LOOKBACK_DAYS: ${{ github.event.inputs.lookback_days || '14' }}
-          DISCOVERY_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run && 'true' || 'false' }}
+          # True only for a manual run with dry-run explicitly disabled.
+          # Scheduled runs, and manual runs that leave dry-run checked, stay false.
+          WRITE_DRAFTS: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.dry_run == false || github.event.inputs.dry_run == 'false') }}
         run: |
-          if [ "$DISCOVERY_DRY_RUN" = "true" ]; then
-            npm run research:discover -- --dry-run
-          else
+          echo "Scheduled Monday/Thursday runs always use --dry-run."
+          echo "Manual runs create Sanity drafts only when dry-run is explicitly disabled."
+          if [ "$WRITE_DRAFTS" = "true" ]; then
+            echo "Mode: create Sanity drafts (manual opt-in)."
             npm run research:discover
+          else
+            echo "Mode: dry-run. No Sanity documents will be created or modified."
+            npm run research:discover -- --dry-run
           fi
