@@ -1,0 +1,74 @@
+name: Research enrichment
+
+# SAFETY: manual only. This workflow has no schedule.
+# Dry-run is the default and must not modify Sanity.
+# A real run is possible only when dry_run is explicitly false.
+# Even then, only existing drafts.research-pubmed-{PMID} documents may be updated.
+# This workflow never publishes.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Dry run only. Leave this checked. Uncheck only to update existing drafts. This never publishes.
+        type: boolean
+        default: true
+      limit:
+        description: Maximum drafts to process. Default 3. The script refuses more than 25.
+        type: string
+        required: false
+        default: "3"
+      pmid:
+        description: Optional PMID. Leave empty to process a small batch.
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  enrich:
+    name: Enrich research drafts
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Enrich research drafts
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          RESEARCH_AI_MODEL: ${{ vars.RESEARCH_AI_MODEL }}
+          SANITY_WRITE_TOKEN: ${{ secrets.SANITY_WRITE_TOKEN }}
+          NCBI_CONTACT_EMAIL: ${{ secrets.NCBI_CONTACT_EMAIL }}
+          NCBI_API_KEY: ${{ secrets.NCBI_API_KEY }}
+          NEXT_PUBLIC_SANITY_PROJECT_ID: 8wc8eouj
+          NEXT_PUBLIC_SANITY_DATASET: production
+          NEXT_PUBLIC_SANITY_API_VERSION: "2026-09-22"
+          ENRICH_LIMIT: ${{ github.event.inputs.limit || '3' }}
+          ENRICH_PMID: ${{ github.event.inputs.pmid }}
+          # True only when a manual run explicitly turns dry-run off.
+          WRITE_DRAFTS: ${{ github.event.inputs.dry_run == false || github.event.inputs.dry_run == 'false' }}
+        run: |
+          echo "Research enrichment is manual. It does not publish drafts."
+          echo "A real update happens only when dry-run is explicitly disabled."
+          ARGS=(--limit="${ENRICH_LIMIT:-3}")
+          if [ -n "$ENRICH_PMID" ]; then
+            ARGS+=(--pmid="$ENRICH_PMID")
+          fi
+          if [ "$WRITE_DRAFTS" = "true" ]; then
+            echo "Mode: update existing Sanity drafts. Published documents will not be created."
+            npm run research:enrich -- "${ARGS[@]}"
+          else
+            echo "Mode: dry-run. No Sanity documents will be modified."
+            npm run research:enrich -- --dry-run "${ARGS[@]}"
+          fi
