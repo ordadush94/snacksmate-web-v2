@@ -27,8 +27,7 @@ export function researchHreflangLanguages(
     [item.language]: researchCanonicalUrl(item.language, item),
   };
 
-  const key = item.translationSlug?.trim();
-  if (key && translation?.slug?.trim() && translation.language !== item.language) {
+  if (translation?.slug?.trim() && translation.language !== item.language) {
     languages[translation.language] = researchCanonicalUrl(
       translation.language,
       translation,

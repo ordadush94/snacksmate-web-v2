@@ -5,10 +5,12 @@ import type { SanityClient } from "@sanity/client";
 
 import { isEnrichmentDraftId } from "../research-enrichment/apply";
 import { ELIGIBLE_DRAFTS_QUERY } from "../research-enrichment/sanity";
+import { researchHreflangLanguages } from "../research-seo";
 import {
   articleByLanguageAndSlugQuery,
   researchByLanguageAndSlugQuery,
   researchByLanguageQuery,
+  researchTranslationQuery,
 } from "../../sanity/lib/queries";
 import { parseTranslationArgs } from "./args";
 import {
@@ -367,6 +369,33 @@ test("translation request keeps the API key out of the body", async () => {
   });
   assert.equal(body.includes(secret), false);
   assert.equal(result.kind, "article");
+});
+
+test("an English research page finds Hebrew by translationSlug when its own translationSlug is empty", () => {
+  const englishSlug =
+    "a-two-minute-exercise-snack-may-be-sufficient-to-enhance-energy-metabolism-and-fat-oxidation-in";
+  const page = readFileSync(
+    new URL("../../app/[lang]/research/[slug]/page.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(researchTranslationQuery, /translationSlug == \$slug/);
+  assert.match(researchTranslationQuery, /slug\.current == \$translationSlug/);
+  assert.equal(page.includes("research.translationSlug?.trim() || slug"), true);
+  assert.equal(page.includes("translationKey"), false);
+
+  const languages = researchHreflangLanguages(
+    { slug: englishSlug, language: "en" },
+    { slug: englishSlug, language: "he", translationSlug: englishSlug },
+  );
+  assert.equal(
+    languages.he,
+    `https://www.snacksmate.com/he/research/${englishSlug}/`,
+  );
+  assert.equal(
+    languages.en,
+    `https://www.snacksmate.com/en/research/${englishSlug}/`,
+  );
 });
 
 test("bulk translation defaults to dry-run and a single id can target one document", () => {
