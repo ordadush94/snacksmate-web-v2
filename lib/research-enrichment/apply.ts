@@ -1,11 +1,14 @@
 import { draftIdForPmid } from "../research-discovery/normalize";
-import type { Confidence, EnrichmentOutput, Evidence } from "./schema";
+import type { Confidence, EnrichmentOutput, Evidence, StudyDesignValue } from "./schema";
 
 const DRAFT_ID_PATTERN = /^drafts\.research-pubmed-\d{1,9}$/;
 const REVIEW_DESIGNS = new Set([
   "systematic-review",
   "meta-analysis",
   "narrative-review",
+  "scoping-review",
+  "umbrella-review",
+  "evidence-map",
 ]);
 const PRIMARY_DESIGNS = new Set([
   "randomized-controlled-trial",
@@ -144,7 +147,7 @@ export function buildEnrichmentUpdate(input: {
   let needsReview =
     input.extraction.needsReview || input.extraction.abstractSufficient === false;
 
-  const proposedDesign = acceptStudyDesign(input.extraction.studyDesign);
+  const proposedDesign = resolveStudyDesign(input.extraction.studyDesign, input.source);
   if (hasContent(input.draft.studyDesign)) {
     unchanged.add("studyDesign");
   } else if (proposedDesign) {
@@ -467,7 +470,8 @@ export function isReviewSource(input: {
         type === "systematic review" ||
         type === "meta-analysis" ||
         type.includes("scoping review") ||
-        type.includes("umbrella review"),
+        type.includes("umbrella review") ||
+        type.includes("evidence map"),
     )
   ) {
     return true;
@@ -560,7 +564,20 @@ function considerText(input: {
     return;
   }
 
-  const decision = acceptProse(input);
+  let value = input.value;
+  if (input.field === "intervention" && value?.trim()) {
+    const cleaned = omitInferredSessionCounts(value, input.abstract);
+    if (!cleaned) {
+      input.leftEmpty.push({
+        field: input.field,
+        reason: "session or bout count was not explicit in the abstract",
+      });
+      return;
+    }
+    value = cleaned;
+  }
+
+  const decision = acceptProse({ ...input, value });
   if (!decision.text) {
     input.leftEmpty.push({ field: input.field, reason: decision.reason ?? "not stated" });
     input.onDrop?.(decision.reason ?? "not stated");
@@ -637,13 +654,83 @@ export function proseIssues(
   return issues;
 }
 
-function acceptStudyDesign(
+const IDENTIFIED_REVIEW_DESIGNS: { pattern: RegExp; value: StudyDesignValue }[] = [
+  { pattern: /\bumbrella reviews?\b/i, value: "umbrella-review" },
+  { pattern: /\bscoping reviews?\b/i, value: "scoping-review" },
+  { pattern: /\bevidence maps?\b/i, value: "evidence-map" },
+];
+
+export function resolveStudyDesign(
   field: EnrichmentOutput["studyDesign"],
+  source: EnrichmentSource,
 ): string | null {
+  const accepted = acceptStudyDesign(field);
+  const identified = clearlyIdentifiedReviewDesign(source);
+  if (identified && (accepted === null || accepted === "other")) return identified;
+  return accepted;
+}
+
+export function clearlyIdentifiedReviewDesign(source: EnrichmentSource): StudyDesignValue | null {
+  return matchReviewDesign(`${source.title}\n${source.publicationTypes.join("\n")}`);
+}
+
+function matchReviewDesign(text: string): StudyDesignValue | null {
+  for (const design of IDENTIFIED_REVIEW_DESIGNS) {
+    if (design.pattern.test(text)) return design.value;
+  }
+  return null;
+}
+
+function acceptStudyDesign(field: EnrichmentOutput["studyDesign"]): string | null {
   if (!field.value) return null;
   if (!confidenceMeets(field.confidence, "medium")) return null;
   if (field.evidence === "none") return null;
   return field.value;
+}
+
+const SESSION_COUNT_MODIFIER =
+  "(?:supervised|total|exercise|training|intervention|planned|completed|additional|brief|daily|weekly|scheduled)";
+
+export function omitInferredSessionCounts(text: string, abstract: string): string | null {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (!normalized) return null;
+  const sessionCountClaim = new RegExp(
+    `\\b(\\d+)\\s+(?:${SESSION_COUNT_MODIFIER}\\s+){0,3}(sessions?|bouts?)(?:\\s+per\\s+week|\\s+a\\s+week|\\s+each\\s+week)?(?:\\s+in\\s+\\d+\\s+weeks?)?\\b|\\b(\\d+)\\s+times\\s+(?:per|a|each)\\s+week\\b`,
+    "gi",
+  );
+
+  const cleaned = normalized.replace(sessionCountClaim, (claim, sessions, _unit, times) => {
+    const count = typeof sessions === "string" && sessions ? sessions : times;
+    if (typeof count !== "string") return claim;
+    return sessionCountIsExplicit(count, abstract) ? claim : "";
+  });
+
+  const tidy = tidyOmittedSessionText(cleaned);
+  return tidy.length > 0 ? tidy : null;
+}
+
+function sessionCountIsExplicit(count: string, abstract: string): boolean {
+  const normalized = abstract.replace(/\s+/g, " ");
+  const statedCount = `\\b${count}\\s+(?:${SESSION_COUNT_MODIFIER}\\s+){0,3}`;
+  return (
+    new RegExp(`${statedCount}sessions?\\b`, "i").test(normalized) ||
+    new RegExp(`${statedCount}bouts?\\b`, "i").test(normalized) ||
+    new RegExp(`\\b${count}\\s+times\\s+(?:per|a|each)\\s+week\\b`, "i").test(normalized)
+  );
+}
+
+function tidyOmittedSessionText(text: string): string {
+  const tidy = text
+    .replace(/\s{2,}/g, " ")
+    .replace(/\b(?:total(?:ing|ling)?|for a total of)\b\s*(?=[,.]|$)/gi, "")
+    .replace(/\s+,/g, ",")
+    .replace(/,\s*,+/g, ",")
+    .replace(/,\s*([.]|$)/g, "$1")
+    .replace(/\s+([,.])/g, "$1")
+    .replace(/\s{2,}/g, " ")
+    .replace(/^[\s,]+|[\s,]+$/g, "")
+    .trim();
+  return /[A-Za-z]/.test(tidy) ? tidy : "";
 }
 
 function acceptedOutcomes(field: EnrichmentOutput["outcomes"]): string[] | null {

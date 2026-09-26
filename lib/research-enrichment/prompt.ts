@@ -17,7 +17,9 @@ Excerpt:
 - Do not exaggerate. Do not give medical advice.
 
 Study design:
-- Map to one of the allowed values only when the publication type or abstract supports it.
+- Map to one of the allowed values only when the publication type, title, or abstract supports it.
+- Return scoping-review, umbrella-review, or evidence-map directly when that design is clearly identified.
+- Do not return "other" for a clearly identified scoping review, umbrella review, or evidence map.
 - If the design is unclear, return null or "other". Do not force a specific trial design.
 
 Population:
@@ -28,11 +30,14 @@ Sample size:
 - Return an integer only when one participant count is explicit.
 - Set meaning to "participants" only for that count.
 - If the number counts included papers, set meaning to "included_studies" and do not present it as a participant sample.
-- For a systematic review, meta-analysis, narrative review, scoping review, or umbrella review, return a participant sample size only when one pooled or enrolled participant total is explicit. Do not add sample sizes together. Otherwise return null.
+- For a systematic review, meta-analysis, narrative review, scoping review, umbrella review, or evidence map, return a participant sample size only when one pooled or enrolled participant total is explicit. Do not add sample sizes together. Otherwise return null.
 
 Intervention:
-- Summarize activity type, bout duration, frequency, intensity, and protocol details only when stated.
+- Summarize activity type, bout duration, intensity, rest interval, and protocol details only when the abstract or metadata states them.
 - Use original wording.
+- Include a number of sessions, sessions per week, total exercise sessions, or total bouts only when that exact count is written in the abstract or metadata.
+- If the count would require arithmetic or interpretation, omit it.
+- Do not write a total such as "48 sessions in 4 weeks" unless the source explicitly states 48 sessions.
 
 Duration:
 - Capture the study or intervention period, such as "6 weeks", "8 weeks", or "single acute session".
