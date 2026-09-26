@@ -8,6 +8,7 @@ import {
   buildEnrichmentUpdate,
   copiesAbstractSentence,
   enrichmentDraftId,
+  omitInferredSessionCounts,
   proseIssues,
   type ResearchDraftSnapshot,
 } from "./apply";
@@ -261,6 +262,68 @@ test("observational study language stays associative", () => {
   assert.match(practical, /observational/i);
   assert.match(practical, /associated/i);
   assert.doesNotMatch(practical, /\bcauses\b/i);
+});
+
+test("maps scoping, umbrella, and evidence-map designs directly", () => {
+  const cases = [
+    ["scoping-review", "Exercise snacking: a scoping review", "Scoping Review"],
+    ["umbrella-review", "Exercise snacks: an umbrella review", "Umbrella Review"],
+    ["evidence-map", "Exercise snacking: an evidence map", "Evidence Map"],
+  ] as const;
+
+  for (const [value, title, publicationType] of cases) {
+    const output = extraction();
+    output.studyDesign = { value, confidence: "high", evidence: "metadata" };
+    const plan = planFor(draft(), output, { title, publicationTypes: [publicationType] });
+    assert.equal(plan.set.studyDesign, value);
+    assert.notEqual(plan.set.studyDesign, "other");
+  }
+
+  const mappedToOther = extraction();
+  mappedToOther.studyDesign = { value: "other", confidence: "medium", evidence: "abstract" };
+  const corrected = planFor(draft(), mappedToOther, {
+    title: "Exercise snacking for chronic conditions: a scoping review",
+    publicationTypes: ["Review"],
+  });
+  assert.equal(corrected.set.studyDesign, "scoping-review");
+
+  const parsed = parseEnrichmentOutput({
+    ...extraction(),
+    studyDesign: { value: "umbrella-review", confidence: "high", evidence: "metadata" },
+  });
+  assert.equal(parsed.studyDesign.value, "umbrella-review");
+});
+
+test("omits an intervention session count that would require inference", () => {
+  const abstract =
+    "Sedentary students completed 1-minute hard stair-climbing bouts with 1 minute of rest for 4 weeks.";
+  const inferred =
+    "Hard stair-climbing bouts lasting 1 minute, with 1 minute of rest, totaling 48 sessions in 4 weeks.";
+  assert.equal(omitInferredSessionCounts(inferred, abstract)?.includes("48"), false);
+  assert.doesNotMatch(omitInferredSessionCounts(inferred, abstract) ?? "", /sessions/i);
+
+  const output = extraction();
+  output.intervention.value = inferred;
+  const plan = planFor(draft(), output, { abstract });
+  const text = portableText(plan.set.intervention);
+  assert.doesNotMatch(text, /48/);
+  assert.doesNotMatch(text, /sessions/i);
+  assert.match(text, /1 minute/);
+  assert.match(text, /rest/i);
+
+  const explicitAbstract = "Participants completed 48 sessions of stair climbing.";
+  const explicit = extraction();
+  explicit.intervention.value = "Stair-climbing work totaling 48 sessions.";
+  const kept = planFor(draft(), explicit, { abstract: explicitAbstract });
+  assert.match(portableText(kept.set.intervention), /48 sessions/);
+
+  const modifiedAbstract =
+    "Over 4 weeks, both intervention groups completed 48 supervised sessions, each consisting of three 20 s maximal stair climbs.";
+  const modified = extraction();
+  modified.intervention.value =
+    "Supervised maximal stair climbs lasting 20 seconds, performed over 48 sessions in 4 weeks.";
+  const keptModified = planFor(draft(), modified, { abstract: modifiedAbstract });
+  assert.match(portableText(keptModified.set.intervention), /48 sessions/);
 });
 
 test("draft updates keep the drafts prefix", async () => {

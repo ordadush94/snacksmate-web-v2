@@ -7,6 +7,9 @@ export const STUDY_DESIGN_VALUES = [
   "systematic-review",
   "meta-analysis",
   "narrative-review",
+  "scoping-review",
+  "umbrella-review",
+  "evidence-map",
   "observational-study",
   "pilot-study",
   "feasibility-study",
@@ -133,6 +136,8 @@ export const RESEARCH_ENRICHMENT_JSON_SCHEMA = {
     ),
     studyDesign: {
       type: "object",
+      description:
+        "Use scoping-review, umbrella-review, or evidence-map when that design is clearly identified. Do not use other for a clearly identified scoping review, umbrella review, or evidence map.",
       additionalProperties: false,
       required: ["value", "confidence", "evidence"],
       properties: {
@@ -165,7 +170,7 @@ export const RESEARCH_ENRICHMENT_JSON_SCHEMA = {
       },
     },
     intervention: textAssessmentSchema(
-      "Original summary of activity type, bout length, frequency, intensity, and protocol details that the abstract actually states.",
+      "Original summary of activity type, bout duration, intensity, rest, and protocol details that are explicitly stated. Include a session or bout count only when that exact number is written in the source. Do not calculate totals.",
     ),
     duration: textAssessmentSchema(
       "Trial or program duration, such as 6 weeks or single acute session. Null when only a bout length is known.",
