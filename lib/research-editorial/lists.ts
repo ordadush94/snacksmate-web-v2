@@ -1,17 +1,15 @@
-import type { EditorialStatus } from "./status";
-
 /**
  * Desk filters for Research.
- * Needs Review also includes drafts with no editorialStatus so existing
- * AI-enriched drafts show up before anyone stores the field.
- * Published documents with an empty status stay in Published and All Research.
+ * Editorial lists use editorialStatus. Studio evaluates these in the drafts
+ * perspective, which rewrites draft ids, so these filters do not use
+ * `_id in path("drafts.**")`.
+ * Published matches the published document itself: in the drafts perspective
+ * `_originalId` equals `_id` only when there is no draft overlay.
  */
 export const RESEARCH_EDITORIAL_FILTERS = {
-  needsReview:
-    '_type == "research" && (editorialStatus == "needs_review" || (!defined(editorialStatus) && _id in path("drafts.**")))',
-  readyToPublish: '_type == "research" && editorialStatus == "ready_to_publish"',
-  published: '_type == "research" && !(_id in path("drafts.**"))',
-  rejected: '_type == "research" && editorialStatus == "rejected"',
+  needsReview: '_type == "research" && editorialStatus == "needs_review"',
+  readyToPublish: '_type == "research" && editorialStatus == "ready"',
+  published: '_type == "research" && _originalId == _id',
 } as const;
 
 export type ResearchEditorialListId = keyof typeof RESEARCH_EDITORIAL_FILTERS;
@@ -36,12 +34,6 @@ export const RESEARCH_EDITORIAL_DESK = [
     filter: RESEARCH_EDITORIAL_FILTERS.published,
   },
   {
-    kind: "list",
-    id: "rejected",
-    title: "Rejected",
-    filter: RESEARCH_EDITORIAL_FILTERS.rejected,
-  },
-  {
     kind: "documentType",
     id: "all",
     title: "All Research",
@@ -52,6 +44,8 @@ export const RESEARCH_EDITORIAL_DESK = [
 export type EditorialListDocument = {
   _id: string;
   _type: string;
+  /** Present in the Studio drafts perspective. Equals `_id` for a published document. */
+  _originalId?: string | null;
   editorialStatus?: string | null;
 };
 
@@ -61,23 +55,25 @@ export function matchesResearchEditorialList(
 ): boolean {
   if (document._type !== "research") return false;
   const status = storedStatus(document.editorialStatus);
-  const isDraft = document._id.startsWith("drafts.");
 
   switch (list) {
     case "needsReview":
-      return status === "needs_review" || (status === undefined && isDraft);
+      return status === "needs_review";
     case "readyToPublish":
-      return status === "ready_to_publish";
+      return status === "ready";
     case "published":
-      return !isDraft;
-    case "rejected":
-      return status === "rejected";
+      return isPublishedDocument(document);
     default:
       return false;
   }
 }
 
-function storedStatus(status: string | null | undefined): EditorialStatus | string | undefined {
+function isPublishedDocument(document: EditorialListDocument): boolean {
+  return typeof document._originalId === "string" && document._originalId === document._id;
+}
+
+function storedStatus(status: string | null | undefined): string | undefined {
   if (typeof status !== "string") return undefined;
-  return status;
+  const value = status.trim();
+  return value.length > 0 ? value : undefined;
 }
