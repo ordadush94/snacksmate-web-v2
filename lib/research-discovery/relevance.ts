@@ -88,8 +88,12 @@ const RELATED_RULES: readonly RelevanceRule[] = [
   },
 ];
 
-const COMMENTARY_PUBLICATION_TYPES = new Set(["editorial", "comment", "letter"]);
-const NEWS_PUBLICATION_TYPES = new Set(["news", "newspaper article"]);
+/**
+ * These PubMed publication types are commentary, not study results.
+ * They override a core phrase in the title.
+ */
+const EDITORIAL_PUBLICATION_TYPE =
+  /\b(?:editorials?|comments?|commentaries|commentary|letters?|perspectives?|viewpoints?|opinions?|news|newspapers?)\b/i;
 
 const CORRECTION_TITLE =
   /^(?:(?:author|publisher)\s+)?(?:corrections?|errata|erratum|corrigenda|corrigendum)\s*(?::|to\b)|^(?:author|publisher)\s+(?:correction|erratum|corrigendum)\b|^published\s+erratum\b/i;
@@ -132,16 +136,16 @@ export function assessRelevance(input: {
     };
   }
 
-  if (topical.disposition !== "reject" && isNews(publicationTypes)) {
+  if (topical.disposition !== "reject" && hasEditorialPublicationType(publicationTypes)) {
     return {
       disposition: "review_candidate",
       rules: topical.rules,
-      reason: "news item",
+      reason: "Editorial/commentary publication type",
       correctedPmids: [],
     };
   }
 
-  if (topical.disposition !== "reject" && isCommentary(title, publicationTypes)) {
+  if (topical.disposition !== "reject" && COMMENTARY_TITLE.test(title.trim())) {
     return {
       disposition: "review_candidate",
       rules: topical.rules,
@@ -281,19 +285,8 @@ function isProtocol(title: string, publicationTypes: readonly string[]): boolean
   return /\bprotocols?\b/i.test(title);
 }
 
-function isNews(publicationTypes: readonly string[]): boolean {
-  return publicationTypes.some((type) => NEWS_PUBLICATION_TYPES.has(normalizePublicationType(type)));
-}
-
-function isCommentary(title: string, publicationTypes: readonly string[]): boolean {
-  if (
-    publicationTypes.some((type) =>
-      COMMENTARY_PUBLICATION_TYPES.has(normalizePublicationType(type)),
-    )
-  ) {
-    return true;
-  }
-  return COMMENTARY_TITLE.test(title.trim());
+function hasEditorialPublicationType(publicationTypes: readonly string[]): boolean {
+  return publicationTypes.some((type) => EDITORIAL_PUBLICATION_TYPE.test(normalizePublicationType(type)));
 }
 
 function normalizePublicationType(type: string): string {

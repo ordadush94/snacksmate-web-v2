@@ -143,37 +143,43 @@ test("auto-drafts a related title only when the abstract identifies VILPA or exe
   );
 });
 
-test("holds commentary, letters, and news for review", () => {
-  const editorial = assessRelevance({
-    title: 'Integrating exercise into daily life: the potential of "exercise snacks"',
+test("publication type overrides a core phrase in the title", () => {
+  const types = [
+    "Editorial",
+    "Comment",
+    "Commentary",
+    "Letter",
+    "Perspective",
+    "Viewpoint",
+    "News",
+    "Opinion",
+  ];
+
+  for (const publicationType of types) {
+    const decision = assessRelevance({
+      title: "Three Cheers for Vigorous Intermittent Lifestyle Physical Activity",
+      abstract: "",
+      publicationTypes: ["Journal Article", publicationType],
+    });
+    assert.equal(decision.disposition, "review_candidate", publicationType);
+    assert.equal(decision.reason, "Editorial/commentary publication type", publicationType);
+  }
+
+  const exerciseSnacks = assessRelevance({
+    title: "Exercise Snacks and healthy longevity",
     abstract: "",
     publicationTypes: ["Editorial"],
   });
-  assert.equal(editorial.disposition, "review_candidate");
-  assert.equal(editorial.reason, "commentary/perspective");
+  assert.equal(exerciseSnacks.disposition, "review_candidate");
+  assert.equal(exerciseSnacks.reason, "Editorial/commentary publication type");
 
-  const letter = assessRelevance({
-    title: "Current limitations of exercise snacks studies: A road map for the future",
-    abstract: "",
-    publicationTypes: ["Letter"],
-  });
-  assert.equal(letter.disposition, "review_candidate");
-  assert.equal(letter.reason, "commentary/perspective");
-
-  const perspective = assessRelevance({
+  const titledPerspective = assessRelevance({
     title: "A perspective on exercise snacks in primary care",
     abstract: "",
+    publicationTypes: ["Journal Article"],
   });
-  assert.equal(perspective.disposition, "review_candidate");
-  assert.equal(perspective.reason, "commentary/perspective");
-
-  const news = assessRelevance({
-    title: "Exercise snacks reach the clinic",
-    abstract: "",
-    publicationTypes: ["News"],
-  });
-  assert.equal(news.disposition, "review_candidate");
-  assert.equal(news.reason, "news item");
+  assert.equal(titledPerspective.disposition, "review_candidate");
+  assert.equal(titledPerspective.reason, "commentary/perspective");
 });
 
 test("auto-drafts an abstract-only paper when the aim is the core concept", () => {
