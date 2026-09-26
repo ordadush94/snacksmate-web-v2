@@ -42,11 +42,17 @@ export function resolveEnrichmentLimit(value: string | undefined): number {
   return parsed;
 }
 
-export function parsePmidArg(value: string | undefined): string | undefined {
+export function parsePmidArg(value: string | undefined): string[] | undefined {
   if (value === undefined || value.trim() === "") return undefined;
-  const pmid = value.trim();
-  if (!/^\d{1,9}$/.test(pmid)) {
-    throw new Error(`PMID must be a numeric PubMed id. Received: ${value}`);
+  const pmids = value
+    .split(/[,\s]+/)
+    .map((pmid) => pmid.trim())
+    .filter(Boolean);
+  if (pmids.length === 0) return undefined;
+  for (const pmid of pmids) {
+    if (!/^\d{1,9}$/.test(pmid)) {
+      throw new Error(`PMID must be a numeric PubMed id. Received: ${value}`);
+    }
   }
-  return pmid;
+  return pmids;
 }

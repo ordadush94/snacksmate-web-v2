@@ -19,10 +19,14 @@ on:
         required: false
         default: "3"
       pmid:
-        description: Optional PMID. Leave empty to process a small batch.
+        description: Optional PMID or comma-separated PMIDs. Leave empty to process a small batch.
         type: string
         required: false
         default: ""
+      force:
+        description: Testing only. Reprocess the PMIDs above even if enrichment already ran. Leave unchecked. This never publishes and is not for a scheduled run.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -59,12 +63,18 @@ jobs:
           ENRICH_PMID: ${{ github.event.inputs.pmid }}
           # True only when a manual run explicitly turns dry-run off.
           WRITE_DRAFTS: ${{ github.event.inputs.dry_run == false || github.event.inputs.dry_run == 'false' }}
+          # Explicit testing only. Never set on a schedule. A real write still requires dry-run to be unchecked.
+          ENRICH_FORCE: ${{ github.event.inputs.force == true || github.event.inputs.force == 'true' }}
         run: |
           echo "Research enrichment is manual. It does not publish drafts."
           echo "A real update happens only when dry-run is explicitly disabled."
           ARGS=(--limit="${ENRICH_LIMIT:-3}")
           if [ -n "$ENRICH_PMID" ]; then
             ARGS+=(--pmid="$ENRICH_PMID")
+          fi
+          if [ "$ENRICH_FORCE" = "true" ]; then
+            echo "Mode: force. Only the listed PMIDs are reprocessed. Nothing is published."
+            ARGS+=(--force)
           fi
           if [ "$WRITE_DRAFTS" = "true" ]; then
             echo "Mode: update existing Sanity drafts. Published documents will not be created."

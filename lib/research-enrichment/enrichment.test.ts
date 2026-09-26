@@ -661,10 +661,293 @@ test("OpenAI requests use structured Responses output and retry transient failur
   assert.deepEqual(parsed, { ok: true });
 });
 
+test("PMID 42783760 does not imply a glucose benefit or keep a coarser design", () => {
+  const title =
+    "Exercise Snacks and Cardiometabolic Health: An Umbrella Review and De Novo Meta-Analysis";
+  const abstract =
+    "This umbrella review and de novo meta-analysis examined brief activity and post-meal glucose and insulin. Pooled effects were not statistically clear and the intervals were too imprecise to establish an effect. The evidence remains uncertain.";
+  const current = pmidDraft("42783760", { studyDesign: "meta-analysis" });
+  const output = extraction();
+  output.studyDesign = { value: "meta-analysis", confidence: "medium", evidence: "metadata" };
+  output.practicalInterpretation.value =
+    "Brief bouts may affect post-meal glucose and insulin in adults.";
+
+  const rejected = planFor(current, output, { title, abstract, publicationTypes: ["Meta-Analysis"] });
+  assert.equal(rejected.set.studyDesign, "umbrella-review");
+  assert.equal(rejected.set.practicalInterpretation, undefined);
+  assert.equal(rejected.status, "needs_review");
+
+  const cautious = extraction();
+  cautious.studyDesign = output.studyDesign;
+  cautious.practicalInterpretation.value =
+    "Current evidence is insufficient to determine whether brief bouts change post-meal glucose or insulin.";
+  const accepted = planFor(current, cautious, {
+    title,
+    abstract,
+    publicationTypes: ["Meta-Analysis"],
+  });
+  const practical = portableText(accepted.set.practicalInterpretation);
+  assert.match(practical, /insufficient to determine whether/i);
+  assert.doesNotMatch(practical, /may affect|may improve|may provide benefits/i);
+  assert.equal(accepted.set.studyDesign, "umbrella-review");
+
+  const alreadySpecific = pmidDraft("42783760", { studyDesign: "umbrella-review" });
+  const reduced = extraction();
+  reduced.studyDesign = { value: "meta-analysis", confidence: "high", evidence: "metadata" };
+  const kept = planFor(alreadySpecific, reduced, { title, abstract });
+  assert.equal("studyDesign" in kept.set, false);
+
+  const locked = pmidDraft("42783760", {
+    studyDesign: "meta-analysis",
+    editorialStatus: "reviewed",
+  });
+  const lockedPlan = planFor(locked, output, { title, abstract }, { force: true });
+  assert.equal("studyDesign" in lockedPlan.set, false);
+});
+
+test("PMID 42652914 does not claim blood-flow restriction superiority or invent a control", () => {
+  const abstract =
+    "Adults were assigned to stair-climbing snacks with blood-flow restriction or a control group. Performance improved within each group. No significant between-group differences were observed.";
+  const invented = "Control group without the stair-climbing exercise snack protocol";
+  const current = pmidDraft("42652914", {
+    studyDesign: "randomized-controlled-trial",
+    comparator: invented,
+    practicalInterpretation: blocks(
+      "Blood-flow restriction may offer additional performance benefits during stair-climbing snacks.",
+    ),
+  });
+  const output = extraction();
+  output.studyDesign = {
+    value: "randomized-controlled-trial",
+    confidence: "high",
+    evidence: "metadata",
+  };
+  output.comparator = { value: invented, confidence: "high", evidence: "abstract" };
+  output.practicalInterpretation.value =
+    "Blood-flow restriction may offer additional performance benefits.";
+
+  const rejected = planFor(
+    current,
+    output,
+    { title: "Blood-flow restriction stair-climbing snacks", abstract },
+    { force: true },
+  );
+  assert.equal(rejected.set.comparator, "Control group");
+  assert.equal(rejected.set.practicalInterpretation, undefined);
+  assert.equal(rejected.status, "needs_review");
+  assert.equal("studyDesign" in rejected.set, false);
+
+  const safe = extraction();
+  safe.studyDesign = output.studyDesign;
+  safe.comparator = output.comparator;
+  safe.practicalInterpretation.value =
+    "Performance may improve within each group. The study did not establish that adding blood-flow restriction was superior.";
+  const accepted = planFor(
+    current,
+    safe,
+    { title: "Blood-flow restriction stair-climbing snacks", abstract },
+    { force: true },
+  );
+  const practical = portableText(accepted.set.practicalInterpretation);
+  assert.match(practical, /did not establish that adding blood-flow restriction was superior/i);
+  assert.doesNotMatch(practical, /additional performance benefits/i);
+  assert.equal(accepted.set.comparator, "Control group");
+
+  const stated = extraction();
+  stated.comparator = {
+    value: "Control group without the stair-climbing protocol",
+    confidence: "high",
+    evidence: "abstract",
+  };
+  const explicit = planFor(pmidDraft("42652914"), stated, {
+    abstract:
+      "The control group without the stair-climbing protocol continued usual daily activity for four weeks.",
+  });
+  assert.equal(explicit.set.comparator, "Control group without the stair-climbing protocol");
+});
+
+test("PMID 42722087 keeps a review duration that is longer than 60 characters", () => {
+  const duration =
+    "Acute studies (3–24 h), short studies (2–4 days), and interventions lasting 3–12 weeks";
+  assert.ok(duration.length > 60);
+  assert.ok(duration.length <= 160);
+  const output = extraction();
+  output.studyDesign = { value: "scoping-review", confidence: "high", evidence: "metadata" };
+  output.duration = { value: duration, confidence: "high", evidence: "abstract" };
+  const plan = planFor(pmidDraft("42722087"), output, {
+    title: "Exercise snacks: a scoping review",
+    publicationTypes: ["Scoping Review"],
+    abstract:
+      "This scoping review grouped included timings into acute windows of 3 to 24 hours, short protocols of 2 to 4 days, and programs lasting 3 to 12 weeks.",
+  });
+  assert.equal(plan.set.duration, duration);
+
+  const tooLong = extraction();
+  tooLong.duration = {
+    value: `${duration} plus an extra clause that pushes the stored timing past the accepted limit.`,
+    confidence: "high",
+    evidence: "abstract",
+  };
+  assert.ok((tooLong.duration.value ?? "").length > 160);
+  const dropped = planFor(pmidDraft("42722087"), tooLong, {
+    abstract: "Timing was described across several included study windows in this scoping review.",
+  });
+  assert.equal(dropped.set.duration, undefined);
+  assert.match(
+    dropped.leftEmpty.find((field) => field.field === "duration")?.reason ?? "",
+    /too long/,
+  );
+});
+
+test("PMID 42786495 may record that an observational design cannot establish causality", () => {
+  const output = extraction();
+  output.studyDesign = { value: "cohort-study", confidence: "high", evidence: "metadata" };
+  output.limitations = {
+    authorStated: null,
+    designLevel: "Unmeasured diet might explain the finding.",
+    confidence: "medium",
+    evidence: "design_inference",
+  };
+  output.practicalInterpretation.value =
+    "These findings suggest vigorous intermittent activity is associated with the studied outcome. The study is observational and does not establish a causal effect.";
+  const plan = planFor(pmidDraft("42786495"), output, {
+    title: "Vigorous intermittent lifestyle physical activity and incident outcomes",
+    publicationTypes: ["Observational Study"],
+    abstract:
+      "In this cohort, vigorous intermittent lifestyle physical activity was associated with the outcome across follow-up. The analysis was observational.",
+  });
+  const limitations = portableText(plan.set.limitations);
+  assert.match(limitations, /Observational design cannot establish causality\./);
+  assert.doesNotMatch(limitations, /Unmeasured diet/);
+
+  const trial = planFor(draft(), extraction());
+  assert.doesNotMatch(portableText(trial.set.limitations), /cannot establish causality/i);
+});
+
+test("study-design precedence replaces only a coarser supported label", () => {
+  const fromAbstract = extraction();
+  fromAbstract.studyDesign = { value: "meta-analysis", confidence: "high", evidence: "abstract" };
+  const identifiedInAbstract = planFor(pmidDraft("100", { studyDesign: "meta-analysis" }), fromAbstract, {
+    title: "Exercise snacks and cardiometabolic outcomes",
+    abstract: "This umbrella review pooled published meta-analyses of brief activity bouts.",
+    publicationTypes: ["Review"],
+  });
+  assert.equal(identifiedInAbstract.set.studyDesign, "umbrella-review");
+
+  const mentionOnly = planFor(pmidDraft("101", { studyDesign: "meta-analysis" }), fromAbstract, {
+    title: "Exercise snacks and cardiometabolic outcomes",
+    abstract: "Previous umbrella reviews have examined other activity patterns, and this meta-analysis pooled trials.",
+    publicationTypes: ["Meta-Analysis"],
+  });
+  assert.equal("studyDesign" in mentionOnly.set, false);
+
+  const otherDesign = extraction();
+  otherDesign.studyDesign = {
+    value: "randomized-controlled-trial",
+    confidence: "high",
+    evidence: "abstract",
+  };
+  const replacedOther = planFor(pmidDraft("102", { studyDesign: "other" }), otherDesign, {
+    abstract: "This randomized controlled trial assigned students to stair-climbing snacks or usual activity.",
+  });
+  assert.equal(replacedOther.set.studyDesign, "randomized-controlled-trial");
+
+  const mediumOther = extraction();
+  mediumOther.studyDesign = {
+    value: "randomized-controlled-trial",
+    confidence: "medium",
+    evidence: "abstract",
+  };
+  const keptOther = planFor(pmidDraft("103", { studyDesign: "other" }), mediumOther, {
+    abstract: "This randomized controlled trial assigned students to stair-climbing snacks or usual activity.",
+  });
+  assert.equal("studyDesign" in keptOther.set, false);
+
+  const trial = extraction();
+  trial.studyDesign = { value: "umbrella-review", confidence: "high", evidence: "abstract" };
+  const specificTrial = planFor(
+    pmidDraft("104", { studyDesign: "randomized-controlled-trial" }),
+    trial,
+    { title: "Stair-climbing exercise snacks: a randomized trial", publicationTypes: ["Randomized Controlled Trial"] },
+  );
+  assert.equal("studyDesign" in specificTrial.set, false);
+});
+
+test("non-inferiority wording does not block a supported benefit statement", () => {
+  const output = extraction();
+  output.mainFindings.value =
+    "Glucose reductions were significant versus prolonged sitting. The evidence was insufficient to demonstrate non-inferiority against one continuous session.";
+  output.practicalInterpretation.value =
+    "These findings suggest brief stair climbing may improve glucose compared with prolonged sitting. They do not show it matches a continuous session.";
+  const plan = planFor(draft(), output, {
+    abstract:
+      "Glucose fell after brief stair climbing compared with prolonged sitting. The evidence was insufficient to demonstrate non-inferiority versus one continuous exercise session.",
+  });
+  assert.match(portableText(plan.set.practicalInterpretation), /may improve glucose/i);
+});
+
+test("a superiority claim is rejected when a later clause withdraws it", () => {
+  const output = extraction();
+  output.practicalInterpretation.value =
+    "Blood-flow restriction may offer additional performance benefits, but the study did not establish superiority.";
+  const plan = planFor(draft(), output, {
+    abstract:
+      "Both groups improved after stair-climbing snacks. No significant between-group differences were observed.",
+  });
+  assert.equal(plan.set.practicalInterpretation, undefined);
+  assert.equal(plan.status, "needs_review");
+});
+
+test("automation notes drop stale blank-field claims and keep discovery provenance", () => {
+  const abstractToken = "ZZZUNIQUEABSTRACTSENTENCE about stair snacks";
+  const discovery =
+    "Sanity draft created by PubMed discovery. Relevance: exercise-snacks. The abstract was not stored. Population, intervention, outcomes, limitations, and interpretation were left blank for editorial review. Do not publish until a human completes the summary.";
+  const current = pmidDraft("42722087", { automationNote: discovery });
+  const plan = planFor(current, extraction(), { abstract: `${sourceAbstract()} ${abstractToken}.` });
+  const note = String(plan.set.automationNote);
+  assert.match(note, /Sanity draft created by PubMed discovery/);
+  assert.match(note, /Relevance: exercise-snacks/);
+  assert.match(note, /Enrichment later filled study fields the abstract supported/);
+  assert.doesNotMatch(note, /were left blank for editorial review/);
+  assert.doesNotMatch(note, /ZZZUNIQUEABSTRACTSENTENCE/);
+
+  const again = planFor(
+    pmidDraft("42722087", { automationNote: note }),
+    extraction(),
+    { abstract: `${sourceAbstract()} ${abstractToken}.` },
+  );
+  assert.equal(again.set.automationNote, undefined);
+
+  const editor = pmidDraft("42722087", {
+    automationNote: "Editor rewrote this note after reading the paper.",
+  });
+  const custom = planFor(editor, extraction());
+  assert.equal(custom.set.automationNote, undefined);
+  assert.ok(custom.unchanged.includes("automationNote"));
+
+  const locked = pmidDraft("42722087", {
+    editorialStatus: "reviewed",
+    automationNote: discovery,
+    practicalInterpretation: blocks("Human interpretation."),
+    excerpt: originalExcerpt(),
+    studyDesign: "scoping-review",
+    population: "Included adults",
+    intervention: blocks("Included snack protocols."),
+    mainFindings: blocks("Findings already reviewed."),
+    limitations: blocks("Limitations already reviewed."),
+  });
+  const lockedPlan = planFor(locked, extraction(), {}, { force: true });
+  assert.equal(lockedPlan.set.automationNote, undefined);
+  assert.equal(lockedPlan.set.practicalInterpretation, undefined);
+  assert.equal(lockedPlan.comparisons.length, 6);
+  assert.equal(plan.comparisons.length, 0);
+});
+
 function planFor(
   current: ResearchDraftSnapshot,
   output: EnrichmentOutput,
   sourceOverrides: Partial<ReturnType<typeof source>> = {},
+  options?: { force?: boolean },
 ) {
   return buildEnrichmentUpdate({
     draft: current,
@@ -672,7 +955,21 @@ function planFor(
     source: { ...source(), ...sourceOverrides },
     model: MODEL,
     enrichedAt: ENRICHED_AT,
+    force: options?.force,
   });
+}
+
+function pmidDraft(
+  pmid: string,
+  fields: Partial<ResearchDraftSnapshot> = {},
+): ResearchDraftSnapshot {
+  return {
+    ...draft(),
+    _id: `drafts.research-pubmed-${pmid}`,
+    pmid,
+    title: fields.title ?? draft().title,
+    ...fields,
+  };
 }
 
 function draft(): ResearchDraftSnapshot {

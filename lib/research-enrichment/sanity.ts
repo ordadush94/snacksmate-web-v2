@@ -1,6 +1,11 @@
 import type { SanityClient } from "@sanity/client";
 
-import { assertDraftDocumentId, enrichmentDraftId, type ResearchDraftSnapshot } from "./apply";
+import {
+  assertDraftDocumentId,
+  enrichmentDraftId,
+  type EditorialChecklistSnapshot,
+  type ResearchDraftSnapshot,
+} from "./apply";
 
 export const ELIGIBLE_DRAFTS_QUERY = `*[
   _type == "research" &&
@@ -31,8 +36,53 @@ export const ELIGIBLE_DRAFTS_QUERY = `*[
   journal,
   doi,
   importSource,
-  editorialStatus
+  editorialStatus,
+  automationNote,
+  editorialChecklist
 }`;
+
+export const DRAFTS_BY_PMID_QUERY = `*[
+  _type == "research" &&
+  _id in path("drafts.**") &&
+  importSource == "pubmed" &&
+  pmid in $pmids &&
+  editorialStatus != "rejected"
+] {
+  _id,
+  pmid,
+  title,
+  excerpt,
+  studyDesign,
+  population,
+  sampleSize,
+  intervention,
+  duration,
+  comparator,
+  outcomes,
+  mainFindings,
+  limitations,
+  practicalInterpretation,
+  journal,
+  doi,
+  importSource,
+  editorialStatus,
+  automationNote,
+  editorialChecklist
+}`;
+
+export async function loadResearchDraftsByPmid(
+  client: SanityClient,
+  pmids: string[],
+): Promise<ResearchDraftSnapshot[]> {
+  const rows = await client.fetch<unknown>(DRAFTS_BY_PMID_QUERY, { pmids });
+  const list = Array.isArray(rows) ? rows : [];
+  const drafts: ResearchDraftSnapshot[] = [];
+  for (const row of list) {
+    const draft = toSnapshot(row);
+    if (draft) drafts.push(draft);
+  }
+  return drafts;
+}
 
 export async function loadEligibleResearchDrafts(
   client: SanityClient,
@@ -99,6 +149,19 @@ function toSnapshot(value: unknown): ResearchDraftSnapshot | null {
     journal: optionalString(row.journal),
     doi: optionalString(row.doi),
     editorialStatus: optionalString(row.editorialStatus),
+    automationNote: optionalString(row.automationNote),
+    editorialChecklist: checklistOrNull(row.editorialChecklist),
+  };
+}
+
+function checklistOrNull(value: unknown): EditorialChecklistSnapshot | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  return {
+    reviewedMetadata: row.reviewedMetadata === true,
+    reviewedScientificSummary: row.reviewedScientificSummary === true,
+    reviewedPracticalInterpretation: row.reviewedPracticalInterpretation === true,
+    reviewedLinks: row.reviewedLinks === true,
   };
 }
 
