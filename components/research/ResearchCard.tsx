@@ -1,4 +1,3 @@
-import Link from "next/link";
 import type { Locale } from "@/content/types";
 import {
   getResearchCopy,
@@ -6,7 +5,12 @@ import {
   researchTopicLabel,
   studyDesignLabel,
 } from "@/content/research";
-import type { ResearchListItem } from "@/sanity/lib/research";
+import {
+  researchImageAlt,
+  researchImageUrl,
+  type ResearchListItem,
+} from "@/sanity/lib/research";
+import { ContentCard } from "@/components/content/ContentCard";
 
 type ResearchCardProps = {
   item: ResearchListItem;
@@ -18,6 +22,7 @@ export function ResearchCard({ item, locale }: ResearchCardProps) {
   const href = researchItemPath(locale, item.slug);
   const topic = researchTopicLabel(item.topic, locale);
   const design = studyDesignLabel(item.studyDesign, locale);
+  const imageUrl = researchImageUrl(item.mainImage, 960, 540);
   const details = [
     item.journal?.trim(),
     item.year,
@@ -27,26 +32,23 @@ export function ResearchCard({ item, locale }: ResearchCardProps) {
   ].filter(Boolean);
 
   return (
-    <article className="research-card">
-      <div className="research-card-body">
-        {topic || design ? (
-          <p className="research-card-chips">
-            {topic ? <span className="research-chip">{topic}</span> : null}
-            {design ? <span className="research-chip">{design}</span> : null}
-          </p>
-        ) : null}
-        <h2>
-          <Link href={href}>{item.title}</Link>
-        </h2>
-        {item.excerpt ? <p className="article-excerpt">{item.excerpt}</p> : null}
-        {details.length > 0 ? (
-          <p className="article-meta">{details.join(" · ")}</p>
-        ) : null}
-        <Link className="article-read-link" href={href}>
-          {copy.readResearch}
-          <span className="sr-only">: {item.title}</span>
-        </Link>
-      </div>
-    </article>
+    <ContentCard
+      href={href}
+      title={item.title}
+      linkLabel={copy.readResearch}
+      takeaway={item.excerpt}
+      chips={[topic, design].filter((chip): chip is string => Boolean(chip))}
+      image={
+        imageUrl
+          ? {
+              src: imageUrl,
+              alt: researchImageAlt(item.mainImage, item.title),
+              width: 960,
+              height: 540,
+            }
+          : undefined
+      }
+      meta={details.length > 0 ? details.join(" · ") : undefined}
+    />
   );
 }

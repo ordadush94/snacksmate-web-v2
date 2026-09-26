@@ -23,9 +23,9 @@ export function BrandMark({ variant, href = "#sm-top" }: BrandMarkProps) {
   }
 
   return (
-    <a className="brand" href={href} data-sm-scroll={scrollId}>
+    <a className="brand" href={href} aria-label={BRAND_NAME} data-sm-scroll={scrollId}>
       <img src={LOGO_SRC} width={40} height={40} alt="" />
-      {BRAND_NAME}
+      <span className="brand-name">{BRAND_NAME}</span>
     </a>
   );
 }

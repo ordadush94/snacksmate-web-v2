@@ -183,3 +183,13 @@ export function pickRelatedArticles(
   const otherTopics = others.filter((article) => article.topic !== topic);
   return [...sameTopic, ...otherTopics].slice(0, limit);
 }
+
+export function pickArticlesByTopic(
+  articles: ArticleListItem[],
+  topic: string | undefined,
+  limit = 1,
+): ArticleListItem[] {
+  const key = topic?.trim();
+  if (!key) return [];
+  return articles.filter((article) => article.topic === key).slice(0, limit);
+}

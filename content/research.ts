@@ -46,10 +46,12 @@ const STUDY_DESIGN_LABELS: Record<string, Record<Locale, string>> = {
 export const researchCopy = {
   en: {
     navLabel: "Research",
-    pageTitle: "Research",
+    pageTitle: "The Exercise-Snack Evidence, in Plain Language",
     pageDescription:
-      "Structured summaries of scientific studies on exercise snacks, VILPA, and everyday movement.",
-    empty: "No research summaries published yet.",
+      "Snacksmate reads scientific studies on exercise snacks and explains them in plain language.",
+    empty:
+      "We’re building a growing library of research on exercise snacks, VILPA, and short bouts of activity.",
+    emptyAction: "What is an exercise snack?",
     noMatches: "No research summaries match these filters.",
     readResearch: "Read summary",
     searchLabel: "Search research",
@@ -60,6 +62,10 @@ export const researchCopy = {
     allTopics: "All topics",
     allStudyDesigns: "All study designs",
     allYears: "All years",
+    clearFilters: "Clear filters",
+    summaryCount: (count: number) =>
+      count === 1 ? "1 research summary" : `${count} research summaries`,
+    studyTitleLabel: "Study title",
     publishedLabel: "Summary published",
     updatedLabel: "Updated",
     summaryByLabel: "Summary by",
@@ -83,20 +89,27 @@ export const researchCopy = {
     doiLabel: "DOI",
     journalLabel: "Journal",
     sampleSizeShort: (n: number) => `n = ${n}`,
-    backToResearch: "All research",
+    backToResearch: "Back to all research",
     homeLabel: "Home",
     breadcrumbLabel: "Breadcrumb",
     relatedHeading: "Related research",
+    closingHeading: "What can you take from this?",
+    closingNote:
+      "The notes above are Snacksmate’s reading of this study, not personal advice.",
+    relatedArticleLabel: "Related article",
+    appCta: "Try a few minutes in Snacksmate",
     metaTitle: "Snacksmate Research – Exercise Snacks, VILPA & Movement Science",
     metaDescription:
       "Structured summaries of scientific studies on exercise snacks, VILPA, cardiorespiratory fitness, and everyday movement.",
   },
   he: {
     navLabel: "מחקרים",
-    pageTitle: "מחקרים",
+    pageTitle: "המחקר על נשנושי כושר — בשפה פשוטה",
     pageDescription:
-      "סיכומים מובנים של מחקרים מדעיים על נשנושי כושר, VILPA ותנועה בחיי היומיום.",
-    empty: "עדיין לא פורסמו סיכומי מחקרים.",
+      "Snacksmate קוראת מחקרים מדעיים על נשנושי כושר ומסבירה אותם בשפה פשוטה.",
+    empty:
+      "אנחנו בונים ספריית מחקר מתרחבת על נשנושי כושר, VILPA ופעילות קצרה לאורך היום.",
+    emptyAction: "מהו נשנוש כושר?",
     noMatches: "אין סיכומי מחקרים שתואמים לסינון הזה.",
     readResearch: "לקריאת הסיכום",
     searchLabel: "חיפוש מחקרים",
@@ -107,6 +120,10 @@ export const researchCopy = {
     allTopics: "כל הנושאים",
     allStudyDesigns: "כל סוגי המחקרים",
     allYears: "כל השנים",
+    clearFilters: "ניקוי סינון",
+    summaryCount: (count: number) =>
+      count === 1 ? "סיכום מחקר אחד" : `${count} סיכומי מחקרים`,
+    studyTitleLabel: "כותרת המחקר",
     publishedLabel: "הסיכום פורסם",
     updatedLabel: "עודכן",
     summaryByLabel: "סיכום מאת",
@@ -130,10 +147,15 @@ export const researchCopy = {
     doiLabel: "DOI",
     journalLabel: "כתב עת",
     sampleSizeShort: (n: number) => `n = ${n}`,
-    backToResearch: "לכל המחקרים",
+    backToResearch: "חזרה לכל המחקרים",
     homeLabel: "בית",
     breadcrumbLabel: "נתיב ניווט",
     relatedHeading: "מחקרים קשורים",
+    closingHeading: "מה אפשר לקחת מהמחקר?",
+    closingNote:
+      "ההערות למעלה הן הקריאה של Snacksmate את המחקר, לא עצה אישית.",
+    relatedArticleLabel: "כתבה קשורה",
+    appCta: "כמה דקות עם Snacksmate",
     metaTitle: "מחקרים של Snacksmate – נשנושי כושר, VILPA ומדע התנועה",
     metaDescription:
       "סיכומים מובנים של מחקרים מדעיים על נשנושי כושר, VILPA, כושר לב-ריאה ותנועה בחיי היומיום.",

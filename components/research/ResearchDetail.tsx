@@ -16,6 +16,7 @@ import {
   researchPageJsonLd,
   scholarlyArticleJsonLd,
 } from "@/lib/research-seo";
+import { formatOutcomeList, stripEditorialLabels } from "@/lib/research-display";
 import { absoluteUrl } from "@/lib/site";
 import {
   researchImageAlt,
@@ -25,11 +26,19 @@ import {
 } from "@/sanity/lib/research";
 import { ArticlePortableText } from "@/components/articles/ArticlePortableText";
 import { JsonLd } from "@/components/articles/JsonLd";
+import { PublicationShell } from "@/components/site/PublicationShell";
+
+type RelatedArticleLink = {
+  title: string;
+  href: string;
+};
 
 type ResearchDetailProps = {
   research: Research;
   locale: Locale;
   related: ResearchListItem[];
+  relatedArticle?: RelatedArticleLink | null;
+  alternateHref?: string;
 };
 
 function hasPortableText(
@@ -47,6 +56,8 @@ export function ResearchDetail({
   research,
   locale,
   related,
+  relatedArticle = null,
+  alternateHref,
 }: ResearchDetailProps) {
   const copy = getResearchCopy(locale);
   const topic = researchTopicLabel(research.topic, locale);
@@ -57,6 +68,7 @@ export function ResearchDetail({
   const researchUrl = absoluteUrl(researchPath(locale));
   const description =
     research.excerpt?.trim() || research.seoDescription?.trim();
+  const displayTitle = research.seoTitle?.trim() || research.title;
   const authors = research.studyAuthors?.map((name) => name.trim()).filter(Boolean);
   const outcomes = research.outcomes?.map((item) => item.trim()).filter(Boolean);
   const journal = textValue(research.journal);
@@ -74,7 +86,9 @@ export function ResearchDetail({
       reference.doi ||
       reference.year,
   );
-  const overviewRows: { label: string; value: string }[] = [];
+  const overviewRows: { label: string; value: string }[] = [
+    { label: copy.studyTitleLabel, value: research.title },
+  ];
   if (authors?.length) {
     overviewRows.push({ label: copy.studyAuthorsLabel, value: authors.join(", ") });
   }
@@ -94,8 +108,17 @@ export function ResearchDetail({
     overviewRows.push({ label: copy.comparatorLabel, value: comparator });
   }
   if (outcomes?.length) {
-    overviewRows.push({ label: copy.outcomesLabel, value: outcomes.join(" · ") });
+    const outcomeList = formatOutcomeList(outcomes);
+    if (outcomeList) {
+      overviewRows.push({ label: copy.outcomesLabel, value: outcomeList });
+    }
   }
+  const limitations = hasPortableText(research.limitations)
+    ? stripEditorialLabels(research.limitations)
+    : null;
+  const hasTakeaway =
+    hasPortableText(research.practicalInterpretation) ||
+    hasPortableText(research.snacksmateRelevance);
   const metaChips = [
     journal,
     research.year,
@@ -103,6 +126,11 @@ export function ResearchDetail({
   ].filter(Boolean);
 
   return (
+    <PublicationShell
+      locale={locale}
+      researchActive
+      alternateHref={alternateHref}
+    >
     <article className="research-page">
       <JsonLd
         data={[
@@ -148,12 +176,12 @@ export function ResearchDetail({
               <span aria-hidden="true" className="article-breadcrumb-sep">
                 &gt;
               </span>
-              <span aria-current="page">{research.title}</span>
+              <span aria-current="page">{displayTitle}</span>
             </li>
           </ol>
         </nav>
         {topic ? <p className="section-kicker">{topic}</p> : null}
-        <h1>{research.title}</h1>
+        <h1>{displayTitle}</h1>
         {research.excerpt ? <p className="lede">{research.excerpt}</p> : null}
         <p className="article-meta">
           {research.summaryAuthor ? `${copy.summaryByLabel} ${research.summaryAuthor} · ` : null}
@@ -178,7 +206,7 @@ export function ResearchDetail({
         {metaChips.length > 0 ? (
           <p className="research-meta-row">
             {metaChips.map((chip) => (
-              <span key={String(chip)} className="research-chip">
+              <span key={String(chip)} className="chip">
                 {chip}
               </span>
             ))}
@@ -235,11 +263,11 @@ export function ResearchDetail({
             </div>
           </section>
         ) : null}
-        {hasPortableText(research.limitations) ? (
+        {limitations && limitations.length > 0 ? (
           <section className="research-section">
             <h2>{copy.limitationsHeading}</h2>
             <div className="article-body">
-              <ArticlePortableText value={research.limitations} />
+              <ArticlePortableText value={limitations} />
             </div>
           </section>
         ) : null}
@@ -337,7 +365,32 @@ export function ResearchDetail({
             </ul>
           </section>
         ) : null}
+        <section className="content-close">
+          <h2>{copy.closingHeading}</h2>
+          {hasTakeaway ? (
+            <p className="content-close-note">{copy.closingNote}</p>
+          ) : null}
+          <p>
+            <Link className="text-link" href={researchPath(locale)}>
+              {copy.backToResearch}
+            </Link>
+          </p>
+          {relatedArticle ? (
+            <div>
+              <p className="section-kicker">{copy.relatedArticleLabel}</p>
+              <Link className="text-link" href={relatedArticle.href}>
+                {relatedArticle.title}
+              </Link>
+            </div>
+          ) : null}
+          <p>
+            <a className="text-link" href={`/${locale}/#sm-download`}>
+              {copy.appCta}
+            </a>
+          </p>
+        </section>
       </div>
     </article>
+    </PublicationShell>
   );
 }

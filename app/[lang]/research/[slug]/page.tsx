@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { isLocale } from "@/content";
+import { articlePath } from "@/content/articles";
+import { researchItemPath } from "@/content/research";
 import { ResearchDetail } from "@/components/research/ResearchDetail";
 import { createResearchMetadata } from "@/lib/metadata";
+import { getArticlesByLanguage, pickArticlesByTopic } from "@/sanity/lib/articles";
 import {
   getPublishedResearchParams,
   getResearchByLanguage,
@@ -51,8 +54,34 @@ export default async function ResearchItemPage({
 
   const items = await getResearchByLanguage(lang);
   const related = pickRelatedResearch(items, research);
+  const translationKey = research.translationSlug?.trim();
+  const translation = translationKey
+    ? await getResearchTranslation(lang, slug, translationKey)
+    : null;
+  const [relatedArticle] = pickArticlesByTopic(
+    await getArticlesByLanguage(lang),
+    research.topic,
+    1,
+  );
 
   return (
-    <ResearchDetail research={research} locale={lang} related={related} />
+    <ResearchDetail
+      research={research}
+      locale={lang}
+      related={related}
+      relatedArticle={
+        relatedArticle
+          ? {
+              title: relatedArticle.title,
+              href: articlePath(lang, relatedArticle.slug),
+            }
+          : null
+      }
+      alternateHref={
+        translation
+          ? researchItemPath(translation.language, translation.slug)
+          : undefined
+      }
+    />
   );
 }

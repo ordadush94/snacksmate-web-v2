@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { Locale } from "@/content/types";
 import {
@@ -36,17 +37,39 @@ export function ResearchLibrary({ locale, items }: ResearchLibraryProps) {
     () => filterResearchItems(items, { query, topic, studyDesign, year }),
     [items, query, topic, studyDesign, year],
   );
+  const filtersActive = Boolean(query || topic || studyDesign || year);
+
+  function clearFilters() {
+    setQuery("");
+    setTopic("");
+    setStudyDesign("");
+    setYear("");
+  }
 
   if (items.length === 0) {
     return (
-      <p className="articles-empty" role="status">
-        {copy.empty}
-      </p>
+      <div className="content-empty" role="status">
+        <p>{copy.empty}</p>
+        <Link className="text-link" href={`/${locale}/#sm-what`}>
+          {copy.emptyAction}
+        </Link>
+      </div>
     );
   }
 
   return (
     <>
+      <div className="research-toolbar">
+        <p className="research-count">{copy.summaryCount(filtered.length)}</p>
+        <button
+          type="button"
+          className="research-clear"
+          onClick={clearFilters}
+          disabled={!filtersActive}
+        >
+          {copy.clearFilters}
+        </button>
+      </div>
       <form
         className="research-filters"
         role="search"
@@ -105,11 +128,11 @@ export function ResearchLibrary({ locale, items }: ResearchLibraryProps) {
         </label>
       </form>
       {filtered.length === 0 ? (
-        <p className="articles-empty" role="status">
+        <p className="content-empty" role="status">
           {copy.noMatches}
         </p>
       ) : (
-        <div className="research-list">
+        <div className="content-list">
           {filtered.map((item) => (
             <ResearchCard key={item._id} item={item} locale={locale} />
           ))}

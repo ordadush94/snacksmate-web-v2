@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { isLocale } from "@/content";
 import { ArticleDetail } from "@/components/articles/ArticleDetail";
 import { createArticleMetadata } from "@/lib/metadata";
+import { articlePath } from "@/content/articles";
 import {
   getArticleByLanguageAndSlug,
   getArticleTranslation,
@@ -10,6 +11,7 @@ import {
   getPublishedArticleParams,
   pickRelatedArticles,
 } from "@/sanity/lib/articles";
+import { getResearchByLanguage, pickResearchByTopic } from "@/sanity/lib/research";
 
 export const revalidate = 60;
 export const dynamicParams = true;
@@ -51,6 +53,27 @@ export default async function ArticlePage({
 
   const articles = await getArticlesByLanguage(lang);
   const related = pickRelatedArticles(articles, article);
+  const translationKey = article.translationSlug?.trim();
+  const translation = translationKey
+    ? await getArticleTranslation(lang, slug, translationKey)
+    : null;
+  const relatedResearch = pickResearchByTopic(
+    await getResearchByLanguage(lang),
+    article.topic,
+    3,
+  );
 
-  return <ArticleDetail article={article} locale={lang} related={related} />;
+  return (
+    <ArticleDetail
+      article={article}
+      locale={lang}
+      related={related}
+      relatedResearch={relatedResearch}
+      alternateHref={
+        translation
+          ? articlePath(translation.language, translation.slug)
+          : undefined
+      }
+    />
+  );
 }

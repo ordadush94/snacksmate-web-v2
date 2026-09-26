@@ -13,6 +13,7 @@ import { Benefits } from "@/components/landing/Benefits";
 import { Trust } from "@/components/landing/Trust";
 import { DownloadCta } from "@/components/landing/DownloadCta";
 import { SiteFooter } from "@/components/landing/SiteFooter";
+import { researchPath } from "@/content/research";
 
 type LandingPageProps = {
   content: LandingContent;
@@ -114,18 +115,24 @@ export function LandingPage({ content }: LandingPageProps) {
       <Topbar
         locale={content.locale}
         languageAria={content.languageSwitcherAria}
+        downloadLabel={content.footer.downloadLabel}
+        menuLabel={content.nav.menuLabel}
+        closeMenuLabel={content.nav.closeMenuLabel}
       />
       <main id="sm-top">
         <Hero content={content} />
         <Problem content={content.problem} />
         <Concept content={content.concept} />
-        <Effects content={content.effects} />
+        <Effects
+          content={content.effects}
+          researchHref={researchPath(content.locale)}
+        />
         <HowItWorks content={content.howItWorks} />
         <Benefits content={content.benefits} />
         <Trust content={content.trust} />
         <DownloadCta content={content.download} store={content.store} />
       </main>
-      <SiteFooter content={content.footer} />
+      <SiteFooter content={content.footer} locale={content.locale} />
     </>
   );
 }
