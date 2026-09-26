@@ -35,6 +35,9 @@ export type DiscoveryConfig = {
     apiVersion: string;
     token: string;
   };
+  fetchImpl?: typeof fetch;
+  sleep?: (ms: number) => Promise<void>;
+  now?: () => number;
 };
 
 export async function runResearchDiscovery(
@@ -55,6 +58,9 @@ export async function runResearchDiscovery(
     email: config.email,
     apiKey: config.apiKey,
     lookbackDays: config.lookbackDays,
+    fetchImpl: config.fetchImpl,
+    sleep: config.sleep,
+    now: config.now,
   });
   const crossref = createCrossrefClient({ email: config.email });
   const queriesByPmid = new Map<string, Set<string>>();
