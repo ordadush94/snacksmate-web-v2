@@ -12,6 +12,7 @@ import { buildEnrichmentInput, ENRICHMENT_INSTRUCTIONS } from "../lib/research-e
 import { runResearchEnrichment } from "../lib/research-enrichment/run";
 import {
   loadEligibleResearchDrafts,
+  loadResearchDraftsByPmid,
   patchResearchDraft,
 } from "../lib/research-enrichment/sanity";
 import { createPubmedClient, PubmedUnavailableError } from "../lib/research-discovery/pubmed";
@@ -22,6 +23,7 @@ loadLocalEnv(".env");
 
 function parseArgs(argv: string[]) {
   let dryRun = false;
+  let force = false;
   let limit: string | undefined;
   let pmid: string | undefined;
 
@@ -29,6 +31,10 @@ function parseArgs(argv: string[]) {
     const arg = argv[index];
     if (arg === "--dry-run") {
       dryRun = true;
+      continue;
+    }
+    if (arg === "--force") {
+      force = true;
       continue;
     }
     if (arg === "--limit") {
@@ -52,10 +58,18 @@ function parseArgs(argv: string[]) {
     throw new Error(`Unknown argument: ${arg}`);
   }
 
+  const pmids = parsePmidArg(pmid);
+  if (force && (!pmids || pmids.length === 0)) {
+    throw new Error(
+      "--force requires --pmid. It reprocesses only those drafts and cannot walk the library.",
+    );
+  }
+
   return {
     dryRun,
+    force,
     limit: resolveEnrichmentLimit(limit),
-    pmid: parsePmidArg(pmid),
+    pmids,
   };
 }
 
@@ -131,27 +145,33 @@ async function main() {
     lookbackDays: 1,
   });
 
-  const drafts = await loadEligibleResearchDrafts(sanity);
-  const actionable = drafts.filter(hasEnrichableGap);
+  const drafts = args.force
+    ? await loadResearchDraftsByPmid(sanity, args.pmids ?? [])
+    : await loadEligibleResearchDrafts(sanity);
+  const actionable = args.force ? drafts : drafts.filter(hasEnrichableGap);
   const populated = drafts.length - actionable.length;
-  if (populated > 0) {
+  if (!args.force && populated > 0) {
     console.log(
       `Skipped ${populated} draft${populated === 1 ? "" : "s"} that already have public fields populated.`,
     );
   }
 
-  const selected = args.pmid
-    ? drafts.filter((draft) => draft.pmid === args.pmid)
+  const selected = args.pmids
+    ? drafts.filter((draft) => args.pmids?.includes(draft.pmid))
     : actionable.slice(0, args.limit);
 
-  if (args.pmid && selected.length === 0) {
+  if (args.pmids && selected.length !== args.pmids.length) {
+    const found = new Set(selected.map((draft) => draft.pmid));
+    const missing = args.pmids.filter((pmid) => !found.has(pmid));
     throw new Error(
-      `No eligible PubMed research draft found for PMID ${args.pmid}. Enrichment does not create documents.`,
+      `No eligible PubMed research draft found for PMID ${missing.join(", ")}. Enrichment does not create documents.`,
     );
   }
 
-  if (args.pmid) {
-    console.log(`PMID filter: ${args.pmid}. Limit is ignored for a single draft.`);
+  if (args.pmids) {
+    console.log(
+      `PMID filter: ${args.pmids.join(", ")}.${args.force ? " Force reprocesses these drafts only and does not publish." : " Limit is ignored for an explicit PMID list."}`,
+    );
   } else if (actionable.length > selected.length) {
     console.log(
       `Processing ${selected.length} of ${actionable.length} eligible drafts. Pass --limit to change the batch. The maximum is 25.`,
@@ -160,6 +180,7 @@ async function main() {
 
   const summary = await runResearchEnrichment({
     dryRun: args.dryRun,
+    force: args.force,
     model,
     eligibleCount: actionable.length,
     drafts: selected,

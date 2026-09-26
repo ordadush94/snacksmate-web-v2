@@ -137,7 +137,7 @@ export const RESEARCH_ENRICHMENT_JSON_SCHEMA = {
     studyDesign: {
       type: "object",
       description:
-        "Use scoping-review, umbrella-review, or evidence-map when that design is clearly identified. Do not use other for a clearly identified scoping review, umbrella review, or evidence map.",
+        "Use umbrella-review, scoping-review, or evidence-map when that design is clearly identified, even if the title also says meta-analysis. Those labels are more specific than meta-analysis, systematic-review, narrative-review, or other. Do not use other for a clearly identified scoping review, umbrella review, or evidence map.",
       additionalProperties: false,
       required: ["value", "confidence", "evidence"],
       properties: {
@@ -173,10 +173,10 @@ export const RESEARCH_ENRICHMENT_JSON_SCHEMA = {
       "Original summary of activity type, bout duration, intensity, rest, and protocol details that are explicitly stated. Include a session or bout count only when that exact number is written in the source. Do not calculate totals.",
     ),
     duration: textAssessmentSchema(
-      "Trial or program duration, such as 6 weeks or single acute session. Null when only a bout length is known.",
+      "Trial or program duration in one concise phrase of at most 160 characters, such as 6 weeks, single acute session, or a review summary of stated timings. Null when timing is not stated. Do not invent duration.",
     ),
     comparator: textAssessmentSchema(
-      "The control or comparison condition, only when the abstract states one.",
+      "The control or comparison condition, only when the abstract states it. If the abstract only says control group, the value is Control group. Do not describe control behavior that the abstract does not state.",
     ),
     outcomes: {
       type: "object",
@@ -209,14 +209,14 @@ export const RESEARCH_ENRICHMENT_JSON_SCHEMA = {
         designLevel: {
           anyOf: [{ type: "string" }, { type: "null" }],
           description:
-            "Only a conservative limitation that is obvious from the design, such as a small pilot sample, a cross-sectional design that cannot establish causality, or an observational study. Null otherwise.",
+            "Only a conservative limitation that is obvious from the design, such as a small pilot sample or a cross-sectional design that cannot establish causality. For a cohort or other clearly observational study, Observational design cannot establish causality. is acceptable even when the abstract lists none. Null otherwise. Do not add speculative limitations.",
         },
         confidence: confidenceSchema,
         evidence: evidenceSchema,
       },
     },
     practicalInterpretation: textAssessmentSchema(
-      "Snacksmate plain-language interpretation. This is not the authors' conclusion. Use cautious wording and do not give medical advice.",
+      "Snacksmate plain-language interpretation. This is not the authors' conclusion. Do not give medical advice. If the effect was not statistically clear, the evidence is insufficient, or the results neither support nor refute an effect, do not say may improve, may affect, or may provide benefits. Say the evidence is insufficient or the study did not establish a clear effect. If between-group differences were not significant, do not imply one intervention was superior.",
     ),
     needsReview: {
       type: "boolean",

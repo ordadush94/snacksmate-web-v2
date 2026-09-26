@@ -20,7 +20,9 @@ Study design:
 - Map to one of the allowed values only when the publication type, title, or abstract supports it.
 - Return scoping-review, umbrella-review, or evidence-map directly when that design is clearly identified.
 - Do not return "other" for a clearly identified scoping review, umbrella review, or evidence map.
-- If the design is unclear, return null or "other". Do not force a specific trial design.
+- Precedence: an explicit umbrella review, scoping review, or evidence map is more specific than narrative-review, systematic-review, meta-analysis, or other. A title such as "Umbrella Review and De Novo Meta-Analysis" is umbrella-review, not only meta-analysis.
+- Use high confidence when the title, publication type, or abstract states that design directly.
+- If the design is unclear, return null or "other". Do not force a specific trial design. Do not replace a correct specific trial, cohort, or crossover design.
 
 Population:
 - Include only clearly stated groups, ages, sex, or setting.
@@ -41,10 +43,15 @@ Intervention:
 
 Duration:
 - Capture the study or intervention period, such as "6 weeks", "8 weeks", or "single acute session".
+- Keep it within 160 characters.
+- For a review, one concise summary of the stated timings is allowed, for example "Acute studies (3–24 h), short studies (2–4 days), and interventions lasting 3–12 weeks".
+- Do not invent duration. Return null when the abstract does not state timing.
 - Do not put the length of one exercise bout in this field when the trial period is different or unknown.
 
 Comparator:
-- Describe the control or comparison condition only when it is clearly stated. Otherwise null.
+- Describe the control or comparison condition only when the abstract or metadata states it. Otherwise null.
+- Use only words the source supports. If it only says "control group", return "Control group".
+- Do not add what the control group did, such as "without the exercise protocol", unless the abstract states that behavior.
 
 Outcomes:
 - Return a short list of major or primary outcomes.
@@ -61,12 +68,18 @@ Main findings:
 Limitations:
 - authorStated is only a limitation the abstract itself mentions. Otherwise null.
 - designLevel is only a very conservative limitation that is obvious from the design, such as a small pilot sample, a cross-sectional design that cannot establish causality, or an observational study. Otherwise null.
-- Do not criticize the paper beyond that.
+- For a cohort, cross-sectional, or other clearly observational design, designLevel may be "Observational design cannot establish causality." even when the abstract lists no limitations.
+- Do not add speculative limitations beyond that design fact.
 
 Practical interpretation:
 - This is Snacksmate's wording, not a conclusion written by the study authors.
-- Use cautious phrasing such as "These findings suggest...", "This study supports the possibility that...", or "For practice, this may indicate...".
 - Do not give medical advice, universal recommendations, or claims of proven benefit beyond the design.
+- When a pooled effect is not statistically clear, the intervals are too imprecise to establish an effect, the abstract says the evidence is insufficient, or the results neither support nor refute an effect, do not imply that the intervention probably works.
+- In those cases do not write "may improve", "may affect", or "may provide benefits".
+- Prefer "Current evidence is insufficient to determine whether...", "The study did not establish a clear effect on...", or "The available evidence remains uncertain...".
+- When the study reports within-group changes but no significant difference between intervention groups, do not imply that one intervention was superior.
+- Say "The study did not establish that adding the extra component was superior."
+- Otherwise cautious phrasing such as "These findings suggest..." is acceptable when the result itself supports that reading.
 
 Reviews:
 - Do not describe a review as if it were one trial.

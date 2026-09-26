@@ -40,6 +40,8 @@ export async function runResearchEnrichment(input: {
   model: string;
   eligibleCount: number;
   drafts: ResearchDraftSnapshot[];
+  /** Explicit test rerun. Never set by a scheduled workflow. */
+  force?: boolean;
   fetchRecords: (pmids: string[]) => Promise<{
     records: PubmedEnrichmentRecord[];
     errors: { pmid?: string; message: string }[];
@@ -126,6 +128,7 @@ export async function runResearchEnrichment(input: {
         dryRun: input.dryRun,
         model: input.model,
         enrichedAt: now(),
+        force: input.force === true,
         complete: input.complete,
         writeDraft: input.writeDraft,
         summary,
@@ -146,6 +149,7 @@ async function enrichOne(input: {
   dryRun: boolean;
   model: string;
   enrichedAt: string;
+  force: boolean;
   complete: (study: EnrichmentPromptInput) => Promise<unknown>;
   writeDraft: (id: string, fields: Record<string, unknown>) => Promise<void>;
   summary: EnrichmentSummary;
@@ -163,7 +167,7 @@ async function enrichOne(input: {
     return;
   }
 
-  if (!hasEnrichableGap(input.draft)) {
+  if (!input.force && !hasEnrichableGap(input.draft)) {
     input.summary.skipped += 1;
     console.log(`PMID ${input.draft.pmid}: skipped. Public fields are already populated.`);
     return;
@@ -199,6 +203,7 @@ async function enrichOne(input: {
     source: input.record,
     model: input.model,
     enrichedAt: input.enrichedAt,
+    force: input.force,
   });
   if (plan.abstractInsufficient) {
     input.summary.insufficientAbstracts.push(input.draft.pmid);
@@ -270,6 +275,14 @@ function printPlan(plan: EnrichmentPlan, dryRun: boolean) {
     console.log("Would leave empty:");
     for (const field of plan.leftEmpty) {
       console.log(`  ${field.field}: ${field.reason}`);
+    }
+  }
+  if (plan.comparisons.length > 0) {
+    console.log("Before vs proposed after:");
+    for (const field of plan.comparisons) {
+      console.log(`  ${field.field}`);
+      console.log(`    before: ${field.before}`);
+      console.log(`    after: ${field.after}`);
     }
   }
   console.log(`Internal status: ${plan.status}`);
