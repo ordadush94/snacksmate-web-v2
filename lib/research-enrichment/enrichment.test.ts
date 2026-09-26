@@ -9,8 +9,12 @@ import {
   buildInsufficientAbstractPlan,
   copiesAbstractSentence,
   enrichmentDraftId,
+  evidenceIsUncertain,
+  hasEnrichableGap,
+  isMeaningfulSeoValue,
   omitInferredSessionCounts,
   proseIssues,
+  seoMetadataIssues,
   type ResearchDraftSnapshot,
 } from "./apply";
 import { buildResponsesRequest, requestResearchEnrichment } from "./openai";
@@ -19,6 +23,7 @@ import { ELIGIBLE_DRAFTS_QUERY, patchResearchDraft } from "./sanity";
 import {
   EnrichmentValidationError,
   parseEnrichmentOutput,
+  RESEARCH_ENRICHMENT_JSON_SCHEMA,
   type EnrichmentOutput,
 } from "./schema";
 import {
@@ -943,6 +948,307 @@ test("automation notes drop stale blank-field claims and keep discovery provenan
   assert.equal(plan.comparisons.length, 0);
 });
 
+test("structured SEO output is required and validated before it is written", () => {
+  assert.ok(RESEARCH_ENRICHMENT_JSON_SCHEMA.required.includes("seoTitle"));
+  assert.ok(RESEARCH_ENRICHMENT_JSON_SCHEMA.required.includes("seoDescription"));
+  const seoTitleSchema = RESEARCH_ENRICHMENT_JSON_SCHEMA.properties.seoTitle;
+  const seoDescriptionSchema = RESEARCH_ENRICHMENT_JSON_SCHEMA.properties.seoDescription;
+  assert.equal(seoTitleSchema.additionalProperties, false);
+  assert.equal(seoDescriptionSchema.additionalProperties, false);
+
+  const parsed = parseEnrichmentOutput(extraction());
+  assert.equal(parsed.seoTitle.value, seoTitleText());
+  assert.equal(parsed.seoDescription.value, seoDescriptionText());
+
+  assert.throws(
+    () => parseEnrichmentOutput({ ...extraction(), seoTitle: "a bare string" }),
+    (error: unknown) => error instanceof EnrichmentValidationError,
+  );
+  assert.throws(
+    () =>
+      parseEnrichmentOutput({
+        ...extraction(),
+        seoDescription: { value: 12, confidence: "high", evidence: "abstract" },
+      }),
+    (error: unknown) => error instanceof EnrichmentValidationError,
+  );
+
+  const plan = planFor(draft(), extraction());
+  assert.equal(plan.set.seoTitle, seoTitleText());
+  assert.equal(plan.set.seoDescription, seoDescriptionText());
+  assert.equal(plan.seoTitle.current, "");
+  assert.equal(plan.seoTitle.proposed, seoTitleText());
+  assert.equal(plan.seoTitle.characters, seoTitleText().length);
+  assert.equal(plan.seoDescription.characters, seoDescriptionText().length);
+  assert.equal("canonicalUrl" in plan.set, false);
+  assert.ok(plan.unchanged.includes("canonicalUrl"));
+  assert.match(String(plan.set.aiEnrichmentNote), /SEO metadata generated\./);
+  assert.equal(String(plan.set.aiEnrichmentNote).includes(seoDescriptionText()), false);
+  assert.equal(String(plan.set.automationNote).includes(seoDescriptionText()), false);
+  assert.equal(plan.status, "completed");
+});
+
+test("SEO title and description stay inside a safe length", () => {
+  const title = seoTitleText();
+  assert.ok(title.length >= 45 && title.length <= 60);
+  assert.deepEqual(seoIssues("seoTitle", exactLength(title, 30)), []);
+  assert.deepEqual(seoIssues("seoTitle", exactLength(title, 70)), []);
+  assert.ok(seoIssues("seoTitle", exactLength(title, 29)).includes("length 29 is outside the SEO target"));
+  assert.ok(seoIssues("seoTitle", exactLength(title, 71)).includes("length 71 is too long"));
+
+  const description = seoDescriptionText();
+  assert.ok(description.length >= 140 && description.length <= 160);
+  assert.deepEqual(seoIssues("seoDescription", exactLength(description, 120)), []);
+  assert.deepEqual(seoIssues("seoDescription", exactLength(description, 180)), []);
+  assert.ok(
+    seoIssues("seoDescription", exactLength(description, 119)).includes(
+      "length 119 is outside the SEO target",
+    ),
+  );
+  assert.ok(seoIssues("seoDescription", exactLength(description, 181)).includes("length 181 is too long"));
+
+  const output = extraction();
+  output.seoTitle = assessment(exactLength(title, 90));
+  output.seoDescription = assessment(exactLength(description, 240));
+  const rejected = planFor(draft(), output);
+  assert.equal(rejected.set.seoTitle, undefined);
+  assert.equal(rejected.set.seoDescription, undefined);
+  assert.match(rejected.leftEmpty.find((field) => field.field === "seoTitle")?.reason ?? "", /too long/);
+  assert.match(
+    rejected.leftEmpty.find((field) => field.field === "seoDescription")?.reason ?? "",
+    /too long/,
+  );
+  assert.equal(rejected.status, "needs_review");
+});
+
+test("meaningful manual SEO values are preserved, including under force", () => {
+  const manualTitle = "Editor title for stair-climbing snacks and student fitness";
+  const manualDescription = exactLength(
+    "Editor description of the stair-climbing snack trial and its cautious fitness outcome.",
+    150,
+  );
+  assert.equal(isMeaningfulSeoValue(manualTitle), true);
+  assert.equal(isMeaningfulSeoValue("TBD"), false);
+  assert.equal(isMeaningfulSeoValue("  "), false);
+
+  for (const force of [false, true]) {
+    const current = draft();
+    current.seoTitle = manualTitle;
+    current.seoDescription = manualDescription;
+    const plan = planFor(current, extraction(), {}, { force });
+    assert.equal("seoTitle" in plan.set, false, String(force));
+    assert.equal("seoDescription" in plan.set, false, String(force));
+    assert.ok(plan.unchanged.includes("seoTitle"), String(force));
+    assert.ok(plan.unchanged.includes("seoDescription"), String(force));
+    assert.equal(plan.seoTitle.proposed, manualTitle);
+    assert.equal(plan.seoTitle.characters, manualTitle.length);
+    assert.equal(plan.seoDescription.proposed, manualDescription);
+    assert.equal(String(plan.set.aiEnrichmentNote).includes("SEO metadata generated."), false);
+  }
+
+  const placeholder = draft();
+  placeholder.seoTitle = "TBD";
+  placeholder.seoDescription = "n/a";
+  const filled = planFor(placeholder, extraction(), {}, { force: true });
+  assert.equal(filled.set.seoTitle, seoTitleText());
+  assert.equal(filled.set.seoDescription, seoDescriptionText());
+
+  for (const status of ["reviewed", "ready", "published", "ready_to_publish", "published_manually"]) {
+    const locked = draft();
+    locked.editorialStatus = status;
+    locked.seoTitle = manualTitle;
+    const kept = planFor(locked, extraction(), {}, { force: true });
+    assert.equal("seoTitle" in kept.set, false, status);
+
+    const empty = draft();
+    empty.editorialStatus = status;
+    const untouched = planFor(empty, extraction(), {}, { force: true });
+    assert.equal("seoTitle" in untouched.set, false, status);
+    assert.equal("seoDescription" in untouched.set, false, status);
+    assert.match(
+      untouched.leftEmpty.find((field) => field.field === "seoTitle")?.reason ?? "",
+      /human-reviewed/,
+      status,
+    );
+  }
+
+  const reviewing = draft();
+  reviewing.editorialStatus = "needs_review";
+  const generated = planFor(reviewing, extraction());
+  assert.equal("editorialStatus" in generated.set, false);
+  assert.equal(generated.set.seoTitle, seoTitleText());
+  assert.equal(generated.editorialStatusSet, false);
+});
+
+test("observational SEO uses association language", () => {
+  const causal =
+    "This cohort proves vigorous activity lowers dementia risk in older adults who do brief bursts during daily life now.";
+  assert.ok(seoIssues("seoDescription", causal, { observational: true }).includes("unsupported certainty"));
+  assert.ok(
+    seoIssues("seoDescription", causal, { observational: true }).includes(
+      "missing cautious observational wording",
+    ),
+  );
+
+  const output = extraction();
+  output.studyDesign = { value: "cohort-study", confidence: "high", evidence: "metadata" };
+  output.seoTitle = assessment("VILPA and Brain Health Risk: Prospective Cohort Study");
+  output.seoDescription = assessment(causal);
+  output.mainFindings.value =
+    "Brief vigorous activity was associated with the studied brain-health outcome in this cohort.";
+  output.practicalInterpretation.value =
+    "These findings suggest vigorous intermittent activity is associated with the studied outcome. The study is observational and does not establish a causal effect.";
+  const source = {
+    title: "Vigorous intermittent lifestyle physical activity and brain health",
+    publicationTypes: ["Observational Study"],
+    abstract:
+      "In this prospective cohort, vigorous intermittent lifestyle physical activity was associated with brain-health outcomes. The analysis was observational.",
+  };
+  const rejected = planFor(draft(), output, source);
+  assert.equal(rejected.set.seoDescription, undefined);
+  assert.match(
+    rejected.leftEmpty.find((field) => field.field === "seoDescription")?.reason ?? "",
+    /observational|certainty/,
+  );
+
+  output.seoDescription = assessment(
+    "A prospective cohort associated brief vigorous activity with brain-health risk. The observational design does not establish a causal effect.",
+  );
+  const accepted = planFor(draft(), output, source);
+  assert.equal(
+    accepted.set.seoTitle,
+    "VILPA and Brain Health Risk: Prospective Cohort Study",
+  );
+  assert.match(String(accepted.set.seoDescription), /associated/i);
+  assert.match(String(accepted.set.seoDescription), /observational/i);
+  assert.doesNotMatch(String(accepted.set.seoDescription), /\bproves\b|\bcauses\b|\bcures\b/i);
+});
+
+test("uncertain and null SEO results stay uncertain", () => {
+  const firm =
+    "Exercise snacks improve post-meal glucose and insulin for adults. The summary states a clear benefit from the brief activity bouts.";
+  const uncertainAbstract =
+    "This umbrella review examined brief activity and post-meal glucose. Pooled effects were not statistically clear and the intervals were too imprecise to establish an effect. The evidence remains uncertain.";
+  assert.ok(
+    seoIssues("seoDescription", firm, { abstract: uncertainAbstract, evidenceText: uncertainAbstract }).includes(
+      "uncertain or null finding stated too firmly",
+    ),
+  );
+
+  const cautious =
+    "This review did not establish a clear effect of exercise snacks on post-meal glucose. The available evidence remains uncertain.";
+  assert.deepEqual(
+    seoIssues("seoDescription", cautious, { abstract: uncertainAbstract, evidenceText: uncertainAbstract }).filter(
+      (issue) => issue.includes("uncertain") || issue.includes("benefit"),
+    ),
+    [],
+  );
+
+  const output = extraction();
+  output.seoDescription = assessment(firm);
+  const rejected = planFor(draft(), output, { abstract: uncertainAbstract });
+  assert.equal(rejected.set.seoDescription, undefined);
+
+  output.seoDescription = assessment(cautious);
+  const accepted = planFor(draft(), output, { abstract: uncertainAbstract });
+  assert.match(String(accepted.set.seoDescription), /did not establish/i);
+  assert.match(String(accepted.set.seoDescription), /uncertain/i);
+
+  const nullAbstract =
+    "Adults were assigned to stair-climbing snacks or a control group. No significant between-group differences were observed.";
+  const overstated =
+    "Stair-climbing snacks improve performance for adults assigned to the brief activity program in this comparison.";
+  assert.ok(
+    seoIssues("seoDescription", overstated, { abstract: nullAbstract, evidenceText: nullAbstract }).includes(
+      "uncertain or null finding stated too firmly",
+    ),
+  );
+  const nullSafe =
+    "Stair-climbing snacks were compared in adults. No significant between-group difference was found, so a performance benefit was not established.";
+  const nullOutput = extraction();
+  nullOutput.seoDescription = assessment(nullSafe);
+  const nullPlan = planFor(draft(), nullOutput, { abstract: nullAbstract });
+  assert.match(String(nullPlan.set.seoDescription), /no significant/i);
+  assert.doesNotMatch(String(nullPlan.set.seoDescription), /\bimproves\b/i);
+});
+
+test("SEO text rejects hype, keyword stuffing, excerpt copies, and non-English generation", () => {
+  assert.ok(
+    seoIssues(
+      "seoTitle",
+      "Exercise exercise exercise snacks and exercise glucose responses",
+    ).includes("keyword stuffing"),
+  );
+  assert.ok(seoIssues("seoTitle", "Amazing breakthrough in exercise snack research now").includes("hype"));
+  assert.ok(
+    seoIssues("seoTitle", "This trial proves snacks cure post-meal glucose now").includes(
+      "unsupported certainty",
+    ),
+  );
+  assert.ok(
+    seoIssues("seoDescription", exactLength("This trial guarantees a cure for glucose spikes in adults.", 140)).includes(
+      "unsupported certainty",
+    ),
+  );
+  assert.ok(
+    seoIssues(
+      "seoDescription",
+      exactLength("As an AI, this note summarizes stair-climbing snack findings for search results.", 140),
+    ).includes("prompt or system language"),
+  );
+  assert.ok(
+    seoIssues(
+      "seoDescription",
+      exactLength("System prompt: stair-climbing snacks and fitness in a six-week student trial.", 140),
+    ).includes("prompt or system language"),
+  );
+  assert.ok(
+    seoIssues("seoTitle", "Snacksmate stair snacks and student fitness trial").includes(
+      "Snacksmate was not in the source",
+    ),
+  );
+
+  const copied = extraction();
+  copied.seoDescription = assessment(originalExcerpt().slice(0, 150));
+  const rejected = planFor(draft(), copied);
+  assert.equal(rejected.set.seoDescription, undefined);
+  assert.match(
+    rejected.leftEmpty.find((field) => field.field === "seoDescription")?.reason ?? "",
+    /excerpt/,
+  );
+
+  const hebrew = draft();
+  hebrew.language = "he";
+  const skipped = planFor(hebrew, extraction());
+  assert.equal("seoTitle" in skipped.set, false);
+  assert.equal("seoDescription" in skipped.set, false);
+  assert.match(
+    skipped.leftEmpty.find((field) => field.field === "seoTitle")?.reason ?? "",
+    /non-English/,
+  );
+
+  const english = draft();
+  english.language = "en";
+  assert.equal(planFor(english, extraction()).set.seoTitle, seoTitleText());
+
+  const full = draft();
+  full.excerpt = originalExcerpt();
+  full.studyDesign = "randomized-controlled-trial";
+  full.population = "Sedentary male students";
+  full.sampleSize = 42;
+  full.intervention = blocks("Short stair-climbing bouts.");
+  full.duration = "6 weeks";
+  full.comparator = "usual activity";
+  full.outcomes = ["VO2peak"];
+  full.mainFindings = blocks("Fitness changed modestly.");
+  full.limitations = blocks("The pilot sample is small.");
+  full.practicalInterpretation = blocks("These findings suggest a cautious fitness change.");
+  assert.equal(hasEnrichableGap(full), true);
+  full.seoTitle = seoTitleText();
+  full.seoDescription = seoDescriptionText();
+  assert.equal(hasEnrichableGap(full), false);
+});
+
 function planFor(
   current: ResearchDraftSnapshot,
   output: EnrichmentOutput,
@@ -1070,10 +1376,54 @@ function extraction(): EnrichmentOutput {
       confidence: "high",
       evidence: "abstract",
     },
+    seoTitle: assessment(seoTitleText()),
+    seoDescription: assessment(seoDescriptionText()),
     needsReview: false,
     reviewNote: null,
     abstractSufficient: true,
   };
+}
+
+function seoTitleText(): string {
+  return "Stair-Climbing Exercise Snacks: Fitness Trial";
+}
+
+function seoDescriptionText(): string {
+  return "In a six-week trial, sedentary male students used short stair-climbing snacks or usual activity. The small study followed modest fitness changes.";
+}
+
+function assessment(value: string): EnrichmentOutput["seoTitle"] {
+  return { value, confidence: "high", evidence: "abstract" };
+}
+
+function exactLength(seed: string, length: number): string {
+  const core = seed.replace(/\s+/g, " ").trim();
+  if (core.length >= length) return core.slice(0, length);
+  return core + "x".repeat(length - core.length);
+}
+
+function seoIssues(
+  field: "seoTitle" | "seoDescription",
+  value: string,
+  overrides: {
+    observational?: boolean;
+    abstract?: string;
+    evidenceText?: string;
+    excerpt?: string;
+  } = {},
+): string[] {
+  const abstract = overrides.abstract ?? source().abstract;
+  const evidenceText = overrides.evidenceText ?? abstract;
+  return seoMetadataIssues({
+    field,
+    value,
+    abstract,
+    excerpt: overrides.excerpt ?? originalExcerpt(),
+    sourceText: `${source().title}\n${abstract}`,
+    observational: overrides.observational === true,
+    uncertain: evidenceIsUncertain(evidenceText),
+    evidenceText,
+  });
 }
 
 function blocks(text: string) {

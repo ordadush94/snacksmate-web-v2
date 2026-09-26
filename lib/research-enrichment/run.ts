@@ -213,6 +213,40 @@ async function enrichOne(input: {
   await commitPlan(plan, input.dryRun, input.writeDraft, input.summary);
 }
 
+function optionalText(
+  field:
+    | "excerpt"
+    | "population"
+    | "intervention"
+    | "mainFindings"
+    | "limitations"
+    | "practicalInterpretation",
+  value: unknown,
+): Partial<Record<typeof field, string>> {
+  const text = plainText(value);
+  return text ? { [field]: text } : {};
+}
+
+function plainText(value: unknown): string {
+  if (typeof value === "string") return value.replace(/\s+/g, " ").trim();
+  if (!Array.isArray(value)) return "";
+  return value
+    .map((block) => {
+      if (!block || typeof block !== "object" || !("children" in block)) return "";
+      const children = block.children;
+      if (!Array.isArray(children)) return "";
+      return children
+        .map((child) => {
+          if (!child || typeof child !== "object" || !("text" in child)) return "";
+          return typeof child.text === "string" ? child.text : "";
+        })
+        .join("");
+    })
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function promptFor(
   draft: ResearchDraftSnapshot,
   record: PubmedEnrichmentRecord,
@@ -232,6 +266,12 @@ function promptFor(
       ...(draft.duration ? { duration: draft.duration } : {}),
       ...(draft.comparator ? { comparator: draft.comparator } : {}),
       ...(draft.outcomes && draft.outcomes.length > 0 ? { outcomes: draft.outcomes } : {}),
+      ...optionalText("excerpt", draft.excerpt),
+      ...optionalText("population", draft.population),
+      ...optionalText("intervention", draft.intervention),
+      ...optionalText("mainFindings", draft.mainFindings),
+      ...optionalText("limitations", draft.limitations),
+      ...optionalText("practicalInterpretation", draft.practicalInterpretation),
       populatedFields: populatedFieldNames(draft),
     },
   };
@@ -285,6 +325,9 @@ function printPlan(plan: EnrichmentPlan, dryRun: boolean) {
       console.log(`    after: ${field.after}`);
     }
   }
+  console.log(`Title: ${plan.studyTitle || "(empty)"}`);
+  printSeoField("seoTitle", plan.seoTitle);
+  printSeoField("seoDescription", plan.seoDescription);
   console.log(`Internal status: ${plan.status}`);
   console.log(
     plan.editorialStatusSet
@@ -292,6 +335,15 @@ function printPlan(plan: EnrichmentPlan, dryRun: boolean) {
       : "Editorial status: left unchanged.",
   );
   if (dryRun) console.log("Sanity was not modified.");
+}
+
+function printSeoField(
+  label: string,
+  report: { current: string; proposed: string; characters: number },
+) {
+  console.log(`Current ${label}: ${report.current || "(empty)"}`);
+  console.log(`Proposed ${label}: ${report.proposed || "(none)"}`);
+  console.log(`${label} characters: ${report.characters}`);
 }
 
 function printSummary(summary: EnrichmentSummary) {
