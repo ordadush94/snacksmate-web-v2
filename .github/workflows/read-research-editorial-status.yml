@@ -1,0 +1,89 @@
+name: Read research editorial status
+
+# Temporary read-only check. This workflow never creates, patches, or publishes documents.
+on:
+  push:
+    branches:
+      - cursor/research-editorial-workflow-a960
+    paths:
+      - .github/workflows/read-research-editorial-status.yml
+
+permissions:
+  contents: read
+
+jobs:
+  read:
+    name: Read editorial status
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Read research drafts
+        env:
+          SANITY_WRITE_TOKEN: ${{ secrets.SANITY_WRITE_TOKEN }}
+          NEXT_PUBLIC_SANITY_PROJECT_ID: 8wc8eouj
+          NEXT_PUBLIC_SANITY_DATASET: production
+        run: node --input-type=module <<'EOF'
+          import { createClient } from "@sanity/client";
+
+          const token = process.env.SANITY_WRITE_TOKEN;
+          if (!token) {
+            console.error("SANITY_WRITE_TOKEN is not available.");
+            process.exit(1);
+          }
+
+          const base = {
+            projectId: "8wc8eouj",
+            dataset: "production",
+            apiVersion: "2026-09-22",
+            token,
+            useCdn: false,
+          };
+
+          const draftIds = [
+            "drafts.research-pubmed-42652914",
+            "drafts.research-pubmed-42707187",
+            "drafts.research-pubmed-42722087",
+            "drafts.research-pubmed-42798426",
+            "drafts.research-pubmed-42783760",
+            "drafts.research-pubmed-42786495",
+          ];
+          const publishedIds = draftIds.map((id) => id.replace(/^drafts\./, ""));
+
+          const raw = createClient({ ...base, perspective: "raw" });
+          const drafts = createClient({ ...base, perspective: "drafts" });
+
+          const stored = await raw.fetch(
+            `*[_id in $ids] | order(_id asc) {
+              _id,
+              _type,
+              editorialStatus,
+              aiEnrichmentStatus,
+              importSource
+            }`,
+            { ids: [...draftIds, ...publishedIds] },
+          );
+
+          const lists = await drafts.fetch(`{
+            "needsReview": *[_type == "research" && editorialStatus == "needs_review"] | order(_originalId asc) {
+              _id, _originalId, editorialStatus
+            },
+            "ready": count(*[_type == "research" && editorialStatus == "ready"]),
+            "published": *[_type == "research" && _originalId == _id]{ _id, _originalId, editorialStatus },
+            "allResearch": count(*[_type == "research"]),
+            "articles": count(*[_type == "article"])
+          }`);
+
+          console.log(JSON.stringify({ stored, lists }, null, 2));
+        EOF

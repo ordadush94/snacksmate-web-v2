@@ -1,7 +1,6 @@
 import {
   BookIcon,
   CheckmarkCircleIcon,
-  CloseCircleIcon,
   DocumentsIcon,
   PublishIcon,
   WarningOutlineIcon,
@@ -14,7 +13,6 @@ const RESEARCH_LIST_ICONS = {
   needsReview: WarningOutlineIcon,
   readyToPublish: CheckmarkCircleIcon,
   published: PublishIcon,
-  rejected: CloseCircleIcon,
   all: DocumentsIcon,
 } as const
 

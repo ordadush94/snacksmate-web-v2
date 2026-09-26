@@ -1,34 +1,17 @@
-export const EDITORIAL_STATUSES = [
-  "needs_review",
-  "reviewed",
-  "ready_to_publish",
-  "published_manually",
-  "rejected",
-] as const;
+export const EDITORIAL_STATUSES = ["needs_review", "ready", "published"] as const;
 
 export type EditorialStatus = (typeof EDITORIAL_STATUSES)[number];
 
-export const HUMAN_EDITORIAL_STATUSES = [
-  "reviewed",
-  "ready_to_publish",
-  "published_manually",
-  "rejected",
-] as const satisfies readonly EditorialStatus[];
-
 export const EDITORIAL_STATUS_OPTIONS: { title: string; value: EditorialStatus }[] = [
-  { title: "Needs review", value: "needs_review" },
-  { title: "Reviewed", value: "reviewed" },
-  { title: "Ready to publish", value: "ready_to_publish" },
-  { title: "Published manually", value: "published_manually" },
-  { title: "Rejected", value: "rejected" },
+  { title: "Needs Review", value: "needs_review" },
+  { title: "Ready to Publish", value: "ready" },
+  { title: "Published", value: "published" },
 ];
 
 const EDITORIAL_STATUS_LABELS: Record<EditorialStatus, string> = {
-  needs_review: "Needs review",
-  reviewed: "Reviewed",
-  ready_to_publish: "Ready to publish",
-  published_manually: "Published manually",
-  rejected: "Rejected",
+  needs_review: "Needs Review",
+  ready: "Ready to Publish",
+  published: "Published",
 };
 
 const AI_ENRICHMENT_STATUS_LABELS: Record<string, string> = {
@@ -38,7 +21,7 @@ const AI_ENRICHMENT_STATUS_LABELS: Record<string, string> = {
   needs_review: "AI needs review",
 };
 
-export type EditorialPreviewTone = "needs_review" | "ready_to_publish" | "rejected" | "neutral";
+export type EditorialPreviewTone = "needs_review" | "ready" | "neutral";
 
 export function isDraftDocumentId(id?: string | null): boolean {
   return typeof id === "string" && id.startsWith("drafts.");
@@ -65,8 +48,7 @@ export function editorialPreviewTone(
   documentId?: string | null,
 ): EditorialPreviewTone {
   const value = status?.trim();
-  if (value === "ready_to_publish") return "ready_to_publish";
-  if (value === "rejected") return "rejected";
+  if (value === "ready") return "ready";
   if (value === "needs_review") return "needs_review";
   if (!value && (!documentId || isDraftDocumentId(documentId))) return "needs_review";
   return "neutral";
@@ -79,9 +61,9 @@ export function researchPreviewSubtitle(input: {
   details: Array<string | number | null | undefined>;
 }): string {
   return [
+    ...input.details,
     editorialStatusLabel(input.editorialStatus, input.documentId),
     aiEnrichmentStatusLabel(input.aiEnrichmentStatus),
-    ...input.details,
   ]
     .filter((part) => part !== undefined && part !== null && String(part).trim() !== "")
     .join(" · ");

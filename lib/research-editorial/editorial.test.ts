@@ -21,6 +21,11 @@ import {
   type ResearchEditorialListId,
 } from "./lists";
 import {
+  READY_EDITORIAL_WARNINGS,
+  readyFieldWarning,
+  readySourceLinkWarning,
+} from "./ready";
+import {
   aiEnrichmentStatusLabel,
   editorialPreviewTone,
   editorialStatusAfterEnrichment,
@@ -31,88 +36,93 @@ import {
 const INTERNAL_FIELDS = [
   "editorialStatus",
   "editorialReviewNote",
-  "editorialChecklist",
+  "reviewedStudyDetails",
+  "reviewedMainFindings",
+  "reviewedInterpretation",
+  "reviewedLimitations",
+  "reviewedLinks",
   "reviewedAt",
   "reviewedBy",
-  "reviewedMetadata",
-  "reviewedScientificSummary",
-  "reviewedPracticalInterpretation",
-  "reviewedLinks",
   "aiEnrichedAt",
   "aiModel",
   "aiEnrichmentStatus",
   "aiEnrichmentNote",
+  "automationNote",
+  "importSource",
+  "importedAt",
+  "sourceQueries",
 ];
 
 test("editorial filters select the intended research documents", () => {
   const documents: EditorialListDocument[] = [
-    { _id: "drafts.research-pubmed-1", _type: "research", editorialStatus: "needs_review" },
-    { _id: "drafts.research-pubmed-2", _type: "research" },
-    { _id: "drafts.research-pubmed-3", _type: "research", editorialStatus: "ready_to_publish" },
-    { _id: "drafts.research-pubmed-4", _type: "research", editorialStatus: "rejected" },
-    { _id: "drafts.research-pubmed-5", _type: "research", editorialStatus: "reviewed" },
-    { _id: "drafts.research-pubmed-6", _type: "research", editorialStatus: "published_manually" },
-    { _id: "research-pubmed-1", _type: "research", editorialStatus: "needs_review" },
-    { _id: "research-published", _type: "research" },
-    { _id: "research-ready", _type: "research", editorialStatus: "ready_to_publish" },
-    { _id: "research-rejected", _type: "research", editorialStatus: "rejected" },
-    { _id: "drafts.article-1", _type: "article", editorialStatus: "needs_review" },
+    {
+      _id: "research-pubmed-1",
+      _originalId: "drafts.research-pubmed-1",
+      _type: "research",
+      editorialStatus: "needs_review",
+    },
+    {
+      _id: "research-pubmed-2",
+      _originalId: "drafts.research-pubmed-2",
+      _type: "research",
+      editorialStatus: "ready",
+    },
+    {
+      _id: "research-published",
+      _originalId: "research-published",
+      _type: "research",
+      editorialStatus: "published",
+    },
+    {
+      _id: "research-live",
+      _originalId: "research-live",
+      _type: "research",
+      editorialStatus: "needs_review",
+    },
+    { _id: "drafts.article-1", _originalId: "drafts.article-1", _type: "article", editorialStatus: "needs_review" },
   ];
 
   const ids = (list: ResearchEditorialListId) =>
     documents.filter((document) => matchesResearchEditorialList(document, list)).map((document) => document._id);
 
-  assert.deepEqual(ids("needsReview"), [
-    "drafts.research-pubmed-1",
-    "drafts.research-pubmed-2",
-    "research-pubmed-1",
-  ]);
-  assert.deepEqual(ids("readyToPublish"), ["drafts.research-pubmed-3", "research-ready"]);
-  assert.deepEqual(ids("published"), [
-    "research-pubmed-1",
-    "research-published",
-    "research-ready",
-    "research-rejected",
-  ]);
-  assert.deepEqual(ids("rejected"), ["drafts.research-pubmed-4", "research-rejected"]);
+  assert.deepEqual(ids("needsReview"), ["research-pubmed-1", "research-live"]);
+  assert.deepEqual(ids("readyToPublish"), ["research-pubmed-2"]);
+  assert.deepEqual(ids("published"), ["research-published", "research-live"]);
 
   assert.equal(
     matchesResearchEditorialList(
-      { _id: "drafts.research-pubmed-5", _type: "research", editorialStatus: "reviewed" },
-      "needsReview",
-    ),
-    false,
-  );
-  assert.equal(
-    matchesResearchEditorialList(
-      { _id: "research-published", _type: "research" },
+      {
+        _id: "research-pubmed-2",
+        _originalId: "drafts.research-pubmed-2",
+        _type: "research",
+        editorialStatus: "ready",
+      },
       "needsReview",
     ),
     false,
   );
 
+  for (const filter of Object.values(RESEARCH_EDITORIAL_FILTERS)) {
+    assert.equal(filter.includes('path("drafts.**")'), false, filter);
+  }
   assert.equal(
     RESEARCH_EDITORIAL_FILTERS.needsReview,
-    '_type == "research" && (editorialStatus == "needs_review" || (!defined(editorialStatus) && _id in path("drafts.**")))',
+    '_type == "research" && editorialStatus == "needs_review"',
   );
   assert.equal(
     RESEARCH_EDITORIAL_FILTERS.readyToPublish,
-    '_type == "research" && editorialStatus == "ready_to_publish"',
+    '_type == "research" && editorialStatus == "ready"',
   );
   assert.equal(
     RESEARCH_EDITORIAL_FILTERS.published,
-    '_type == "research" && !(_id in path("drafts.**"))',
-  );
-  assert.equal(
-    RESEARCH_EDITORIAL_FILTERS.rejected,
-    '_type == "research" && editorialStatus == "rejected"',
+    '_type == "research" && _originalId == _id',
   );
 });
 
 test("studio research desk exposes the editorial lists and keeps the document type", () => {
   assert.deepEqual(
     RESEARCH_EDITORIAL_DESK.map((item) => item.title),
-    ["Needs Review", "Ready to Publish", "Published", "Rejected", "All Research"],
+    ["Needs Review", "Ready to Publish", "Published", "All Research"],
   );
   const all = RESEARCH_EDITORIAL_DESK.find((item) => item.kind === "documentType");
   assert.equal(all?.schemaType, "research");
@@ -129,39 +139,36 @@ test("studio research desk exposes the editorial lists and keeps the document ty
   assert.equal(research?.title, "Research");
   assert.deepEqual(
     research?.items?.map((item) => item.title),
-    ["Needs Review", "Ready to Publish", "Published", "Rejected", "All Research"],
+    ["Needs Review", "Ready to Publish", "Published", "All Research"],
   );
   assert.equal(research?.items?.[0]?.child?.filter, RESEARCH_EDITORIAL_FILTERS.needsReview);
   assert.equal(research?.items?.[1]?.child?.filter, RESEARCH_EDITORIAL_FILTERS.readyToPublish);
   assert.equal(research?.items?.[2]?.child?.filter, RESEARCH_EDITORIAL_FILTERS.published);
-  assert.equal(research?.items?.[3]?.child?.filter, RESEARCH_EDITORIAL_FILTERS.rejected);
   assert.equal(research?.items?.[0]?.child?.schemaType, "research");
-  assert.equal(research?.items?.[4]?.schemaType, "research");
-  assert.equal(research?.items?.[4]?.type, "documentTypeListItem");
+  assert.equal(research?.items?.[3]?.schemaType, "research");
+  assert.equal(research?.items?.[3]?.type, "documentTypeListItem");
+  assert.equal(research?.items?.[3]?.title, "All Research");
 });
 
 test("research preview identifies editorial and AI status without hiding the study", () => {
-  assert.equal(editorialStatusLabel(undefined, "drafts.research-pubmed-1"), "Needs review");
+  assert.equal(editorialStatusLabel(undefined, "drafts.research-pubmed-1"), "Needs Review");
   assert.equal(editorialStatusLabel(undefined, "research-published"), "");
-  assert.equal(editorialStatusLabel("ready_to_publish"), "Ready to publish");
-  assert.equal(editorialStatusLabel("rejected"), "Rejected");
+  assert.equal(editorialStatusLabel("ready"), "Ready to Publish");
+  assert.equal(editorialStatusLabel("published"), "Published");
   assert.equal(aiEnrichmentStatusLabel("needs_review"), "AI needs review");
+  assert.equal(aiEnrichmentStatusLabel("completed"), "AI completed");
   assert.equal(editorialPreviewTone(undefined, "drafts.research-pubmed-1"), "needs_review");
   assert.equal(editorialPreviewTone(undefined, "research-published"), "neutral");
-  assert.equal(editorialPreviewTone("ready_to_publish"), "ready_to_publish");
-  assert.equal(editorialPreviewTone("rejected"), "rejected");
-  assert.equal(editorialPreviewTone("reviewed"), "neutral");
+  assert.equal(editorialPreviewTone("ready"), "ready");
+  assert.equal(editorialPreviewTone("published"), "neutral");
 
   const subtitle = researchPreviewSubtitle({
-    editorialStatus: undefined,
-    aiEnrichmentStatus: "needs_review",
+    editorialStatus: "needs_review",
+    aiEnrichmentStatus: "completed",
     documentId: "drafts.research-pubmed-1",
-    details: ["English", "Exercise Snacks", "Randomized Controlled Trial", 2024],
+    details: ["English", "Exercise Snacks"],
   });
-  assert.equal(
-    subtitle,
-    "Needs review · AI needs review · English · Exercise Snacks · Randomized Controlled Trial · 2024",
-  );
+  assert.equal(subtitle, "English · Exercise Snacks · Needs Review · AI completed");
 
   const prepare = researchType.preview?.prepare;
   assert.equal(typeof prepare, "function");
@@ -174,8 +181,6 @@ test("research preview identifies editorial and AI status without hiding the stu
     id: "drafts.research-pubmed-1",
     language: "en",
     topic: "exercise-snacks",
-    studyDesign: "randomized-controlled-trial",
-    year: 2024,
     editorialStatus: undefined,
     aiEnrichmentStatus: undefined,
     media: image,
@@ -185,32 +190,32 @@ test("research preview identifies editorial and AI status without hiding the stu
   const empty = prepare(
     selected({ editorialStatus: undefined, aiEnrichmentStatus: "needs_review" }),
   );
-  assert.match(String(empty.subtitle), /^Needs review · AI needs review · English/);
+  assert.equal(String(empty.subtitle), "English · Exercise Snacks · Needs Review · AI needs review");
   assert.notEqual(empty.media, image);
 
-  const ready = prepare(selected({ editorialStatus: "ready_to_publish" }));
-  assert.match(String(ready.subtitle), /^Ready to publish/);
+  const ready = prepare(selected({ editorialStatus: "ready", aiEnrichmentStatus: "completed" }));
+  assert.equal(String(ready.subtitle), "English · Exercise Snacks · Ready to Publish · AI completed");
   assert.notEqual(ready.media, image);
 
-  const rejected = prepare(
-    selected({ editorialStatus: "rejected", aiEnrichmentStatus: "completed" }),
-  );
-  assert.match(String(rejected.subtitle), /^Rejected · AI completed/);
-  assert.notEqual(rejected.media, image);
-
-  const reviewed = prepare(selected({ editorialStatus: "reviewed" }));
-  assert.match(String(reviewed.subtitle), /^Reviewed/);
-  assert.equal(reviewed.media, image);
-
   const published = prepare(
+    selected({
+      id: "research-published",
+      editorialStatus: "published",
+      aiEnrichmentStatus: "completed",
+    }),
+  );
+  assert.equal(String(published.subtitle), "English · Exercise Snacks · Published · AI completed");
+  assert.equal(published.media, image);
+
+  const publishedWithoutStatus = prepare(
     selected({
       id: "research-published",
       editorialStatus: undefined,
       aiEnrichmentStatus: undefined,
     }),
   );
-  assert.equal(String(published.subtitle).includes("Needs review"), false);
-  assert.equal(published.media, image);
+  assert.equal(String(publishedWithoutStatus.subtitle).includes("Needs Review"), false);
+  assert.equal(publishedWithoutStatus.media, image);
 });
 
 test("editorial fields stay on the internal review group", () => {
@@ -219,30 +224,31 @@ test("editorial fields stay on the internal review group", () => {
   assert.equal(fields.editorialReviewNote?.group, "editorial");
   assert.equal(fields.reviewedAt?.group, "editorial");
   assert.equal(fields.reviewedBy?.group, "editorial");
-  assert.equal(fields.editorialChecklist?.group, "editorial");
   assert.equal(fields.aiEnrichmentStatus?.group, "editorial");
   assert.equal(fields.aiEnrichmentNote?.group, "editorial");
   assert.equal(fields.aiEnrichedAt?.group, "editorial");
   assert.equal(fields.aiModel?.group, "editorial");
-  assert.equal(fields.importSource?.group, "automation");
+  assert.equal(fields.importSource?.group, "editorial");
+  assert.equal(fields.importedAt?.group, "editorial");
+  assert.equal(fields.sourceQueries?.group, "editorial");
+  assert.equal(fields.automationNote?.group, "editorial");
   assert.equal(fields.title?.group, "basic");
+  assert.equal(fields.editorialChecklist, undefined);
 
-  const checklist = fields.editorialChecklist?.fields ?? [];
-  assert.deepEqual(
-    checklist.map((field) => field.name),
-    [
-      "reviewedMetadata",
-      "reviewedScientificSummary",
-      "reviewedPracticalInterpretation",
-      "reviewedLinks",
-    ],
-  );
-  for (const field of checklist) {
-    assert.equal(field.validation, undefined, field.name);
+  for (const name of [
+    "reviewedStudyDetails",
+    "reviewedMainFindings",
+    "reviewedInterpretation",
+    "reviewedLimitations",
+    "reviewedLinks",
+  ]) {
+    assert.equal(fields[name]?.group, "editorial", name);
+    assert.equal(fields[name]?.validation, undefined, name);
   }
 
   const groups = researchType.groups ?? [];
-  assert.ok(groups.some((group) => group.name === "editorial" && group.title === "Editorial Review"));
+  assert.ok(groups.some((group) => group.name === "editorial" && group.title === "Editorial"));
+  assert.equal(groups.some((group) => group.name === "automation"), false);
   assert.equal(researchType.preview?.select?.editorialStatus, "editorialStatus");
   assert.equal(researchType.preview?.select?.aiEnrichmentStatus, "aiEnrichmentStatus");
   assert.equal(researchType.preview?.select?.id, "_id");
@@ -271,6 +277,48 @@ test("discovery still recognizes every research document, including rejected dra
   assert.equal(RESEARCH_IDENTIFIERS_QUERY.includes("rejected"), false);
   assert.match(ELIGIBLE_DRAFTS_QUERY, /editorialStatus != "rejected"/);
   assert.match(ELIGIBLE_DRAFTS_QUERY, /_id in path\("drafts\.\*\*"\)/);
+});
+
+test("ready status warns without blocking a save", () => {
+  const ready = {
+    editorialStatus: "ready",
+    title: "",
+    excerpt: " ",
+    topic: undefined,
+    mainFindings: [],
+    publishedAt: null,
+    doi: "",
+    studyUrl: "  ",
+  };
+  assert.equal(readyFieldWarning(ready, ready.title, READY_EDITORIAL_WARNINGS.title), READY_EDITORIAL_WARNINGS.title);
+  assert.equal(
+    readyFieldWarning(ready, ready.excerpt, READY_EDITORIAL_WARNINGS.excerpt),
+    READY_EDITORIAL_WARNINGS.excerpt,
+  );
+  assert.equal(readyFieldWarning(ready, ready.topic, READY_EDITORIAL_WARNINGS.topic), READY_EDITORIAL_WARNINGS.topic);
+  assert.equal(
+    readyFieldWarning(ready, ready.mainFindings, READY_EDITORIAL_WARNINGS.mainFindings),
+    READY_EDITORIAL_WARNINGS.mainFindings,
+  );
+  assert.equal(
+    readyFieldWarning(ready, ready.publishedAt, READY_EDITORIAL_WARNINGS.publishedAt),
+    READY_EDITORIAL_WARNINGS.publishedAt,
+  );
+  assert.equal(readySourceLinkWarning(ready), READY_EDITORIAL_WARNINGS.sourceLink);
+
+  const complete = {
+    editorialStatus: "ready",
+    title: "Stair snacks",
+    doi: "10.1000/example",
+    studyUrl: "",
+  };
+  assert.equal(readyFieldWarning(complete, complete.title, READY_EDITORIAL_WARNINGS.title), true);
+  assert.equal(readySourceLinkWarning(complete), true);
+  assert.equal(
+    readyFieldWarning({ editorialStatus: "needs_review" }, "", READY_EDITORIAL_WARNINGS.title),
+    true,
+  );
+  assert.equal(readySourceLinkWarning({ editorialStatus: "needs_review" }), true);
 });
 
 test("optional backfill only fills empty status on AI-enriched PubMed drafts", () => {
