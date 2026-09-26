@@ -3,6 +3,7 @@ import { Reveal } from "@/components/landing/Reveal";
 
 type EffectsProps = {
   content: LandingContent["effects"];
+  researchHref: string;
 };
 
 function CheckIcon() {
@@ -20,7 +21,7 @@ function CheckIcon() {
   );
 }
 
-export function Effects({ content }: EffectsProps) {
+export function Effects({ content, researchHref }: EffectsProps) {
   return (
     <section id="sm-effects">
       <div className="wrap">
@@ -39,6 +40,11 @@ export function Effects({ content }: EffectsProps) {
             </li>
           ))}
         </ul>
+        <Reveal as="div" className="effects-more">
+          <a className="text-link" href={researchHref}>
+            {content.researchLink}
+          </a>
+        </Reveal>
       </div>
     </section>
   );

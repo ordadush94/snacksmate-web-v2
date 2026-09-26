@@ -199,3 +199,13 @@ export function pickRelatedResearch(
   const otherTopics = others.filter((item) => item.topic !== topic);
   return [...sameTopic, ...otherTopics].slice(0, limit);
 }
+
+export function pickResearchByTopic(
+  items: ResearchListItem[],
+  topic: string | undefined,
+  limit = 3,
+): ResearchListItem[] {
+  const key = topic?.trim();
+  if (!key) return [];
+  return items.filter((item) => item.topic === key).slice(0, limit);
+}

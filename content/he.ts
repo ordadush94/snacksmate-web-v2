@@ -10,11 +10,16 @@ export const heContent: LandingContent = {
     ogTitle: "Snacksmate",
     ogDescription: "נשנושי כושר של כמה דקות ביום. בלי ציוד. בכל מקום. הורידו עכשיו.",
   },
-  languageSwitcherAria: "Language",
+  languageSwitcherAria: "שפה",
+  nav: {
+    menuLabel: "תפריט",
+    closeMenuLabel: "סגירה",
+  },
   hero: {
     heading: "אין לך שעה לחדר כושר? מספיקות כמה דקות.",
     lede: "נשנושי תרגול קצרים שמכניסים תנועה ליום העמוס - בלי ציוד, בלי התחייבות, בכל מקום.",
-    conceptCta: "מה זה נשנוש כושר?",
+    downloadCta: "הורדת Snacksmate",
+    conceptCta: "מהו נשנוש כושר?",
   },
   problem: {
     kicker: "מוכר?",
@@ -54,6 +59,7 @@ export const heContent: LandingContent = {
       "תמיכה בבריאות הלב וכלי הדם",
       "שיפור מדדים מטבוליים",
     ],
+    researchLink: "למחקרים",
   },
   howItWorks: {
     kicker: "איך זה עובד ב־Snacksmate",
@@ -108,7 +114,9 @@ export const heContent: LandingContent = {
   footer: {
     copyright: "© Snacksmate · נשנושים קטנים. השפעה גדולה.",
     privacyLabel: "פרטיות",
-    termsLabel: "תנאים",
+    termsLabel: "תנאי שימוש",
+    downloadLabel: "הורדה",
+    navLabel: "תחתית",
   },
   store: {
     appStoreLabel: "App Store",

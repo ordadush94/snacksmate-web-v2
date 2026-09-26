@@ -12,9 +12,14 @@ export const enContent: LandingContent = {
       "Short exercise snacks throughout your day. No equipment. Anywhere. Download now.",
   },
   languageSwitcherAria: "Language",
+  nav: {
+    menuLabel: "Menu",
+    closeMenuLabel: "Close",
+  },
   hero: {
     heading: "No time for the gym? A few minutes are enough.",
     lede: "Short exercise snacks that fit a busy day - no equipment, no commitment, anywhere.",
+    downloadCta: "Download Snacksmate",
     conceptCta: "What is an exercise snack?",
   },
   problem: {
@@ -56,6 +61,7 @@ export const enContent: LandingContent = {
       "Support for heart and vascular health",
       "Improved metabolic markers",
     ],
+    researchLink: "Explore the research",
   },
   howItWorks: {
     kicker: "How Snacksmate works",
@@ -111,6 +117,8 @@ export const enContent: LandingContent = {
     copyright: "© Snacksmate · Small snacks. Big impact.",
     privacyLabel: "Privacy",
     termsLabel: "Terms",
+    downloadLabel: "Download",
+    navLabel: "Footer",
   },
   store: {
     appStoreLabel: "App Store",

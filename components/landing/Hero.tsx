@@ -16,6 +16,9 @@ export function Hero({ content }: HeroProps) {
           <h1>{content.hero.heading}</h1>
           <p className="lede">{content.hero.lede}</p>
           <div className="cta-row">
+            <a className="btn btn-primary" href="#sm-download" data-sm-scroll="sm-download">
+              {content.hero.downloadCta}
+            </a>
             <a className="btn btn-ghost" href="#sm-what" data-sm-scroll="sm-what">
               {content.hero.conceptCta}
             </a>

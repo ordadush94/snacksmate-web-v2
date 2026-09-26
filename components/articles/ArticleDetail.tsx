@@ -7,6 +7,7 @@ import {
   getArticlesCopy,
   topicLabel,
 } from "@/content/articles";
+import { researchItemPath } from "@/content/research";
 import {
   articleCanonicalUrl,
   articleJsonLd,
@@ -19,6 +20,8 @@ import {
   type Article,
   type ArticleListItem,
 } from "@/sanity/lib/articles";
+import type { ResearchListItem } from "@/sanity/lib/research";
+import { PublicationShell } from "@/components/site/PublicationShell";
 import { ArticlePortableText } from "./ArticlePortableText";
 import { JsonLd } from "./JsonLd";
 
@@ -26,12 +29,16 @@ type ArticleDetailProps = {
   article: Article;
   locale: Locale;
   related: ArticleListItem[];
+  relatedResearch?: ResearchListItem[];
+  alternateHref?: string;
 };
 
 export function ArticleDetail({
   article,
   locale,
   related,
+  relatedResearch = [],
+  alternateHref,
 }: ArticleDetailProps) {
   const copy = getArticlesCopy(locale);
   const topic = topicLabel(article.topic, locale);
@@ -50,6 +57,11 @@ export function ArticleDetail({
   );
 
   return (
+    <PublicationShell
+      locale={locale}
+      articlesActive
+      alternateHref={alternateHref}
+    >
     <article className="article-page">
       <JsonLd
         data={[
@@ -190,7 +202,34 @@ export function ArticleDetail({
             </ul>
           </section>
         ) : null}
+        <section className="content-close">
+          <p>
+            <Link className="text-link" href={articlesPath(locale)}>
+              {copy.backToArticles}
+            </Link>
+          </p>
+          {relatedResearch.length > 0 ? (
+            <div>
+              <h2>{copy.relatedResearchHeading}</h2>
+              <ul className="content-close-links">
+                {relatedResearch.map((item) => (
+                  <li key={item._id}>
+                    <Link href={researchItemPath(locale, item.slug)}>
+                      {item.title}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          <p>
+            <a className="text-link" href={`/${locale}/#sm-download`}>
+              {copy.appCta}
+            </a>
+          </p>
+        </section>
       </div>
     </article>
+    </PublicationShell>
   );
 }

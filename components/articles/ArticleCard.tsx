@@ -1,4 +1,3 @@
-import Link from "next/link";
 import type { Locale } from "@/content/types";
 import {
   articlePath,
@@ -11,6 +10,7 @@ import {
   articleImageUrl,
   type ArticleListItem,
 } from "@/sanity/lib/articles";
+import { ContentCard } from "@/components/content/ContentCard";
 
 type ArticleCardProps = {
   article: ArticleListItem;
@@ -24,34 +24,30 @@ export function ArticleCard({ article, locale }: ArticleCardProps) {
   const topic = topicLabel(article.topic, locale);
 
   return (
-    <article className="article-card">
-      {imageUrl ? (
-        <Link href={href} className="article-card-image" tabIndex={-1}>
-          <img
-            src={imageUrl}
-            alt={articleImageAlt(article.mainImage, article.title)}
-            width={960}
-            height={540}
-          />
-        </Link>
-      ) : null}
-      <div className="article-card-body">
-        {topic ? <p className="section-kicker">{topic}</p> : null}
-        <h2>
-          <Link href={href}>{article.title}</Link>
-        </h2>
-        <p className="article-excerpt">{article.excerpt}</p>
-        <p className="article-meta">
+    <ContentCard
+      href={href}
+      title={article.title}
+      linkLabel={copy.readArticle}
+      takeaway={article.excerpt}
+      kicker={topic}
+      image={
+        imageUrl
+          ? {
+              src: imageUrl,
+              alt: articleImageAlt(article.mainImage, article.title),
+              width: 960,
+              height: 540,
+            }
+          : undefined
+      }
+      meta={
+        <>
           <time dateTime={article.publishedAt}>
             {formatArticleDate(article.publishedAt, locale)}
           </time>
           {article.author ? ` · ${article.author}` : null}
-        </p>
-        <Link className="article-read-link" href={href}>
-          {copy.readArticle}
-          <span className="sr-only">: {article.title}</span>
-        </Link>
-      </div>
-    </article>
+        </>
+      }
+    />
   );
 }

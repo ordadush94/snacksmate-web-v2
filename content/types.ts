@@ -40,9 +40,14 @@ export type LandingContent = {
     ogDescription: string;
   };
   languageSwitcherAria: string;
+  nav: {
+    menuLabel: string;
+    closeMenuLabel: string;
+  };
   hero: {
     heading: string;
     lede: string;
+    downloadCta: string;
     conceptCta: string;
   };
   problem: {
@@ -63,6 +68,7 @@ export type LandingContent = {
     heading: string;
     lead: string;
     items: string[];
+    researchLink: string;
   };
   howItWorks: {
     kicker: string;
@@ -88,6 +94,8 @@ export type LandingContent = {
     copyright: string;
     privacyLabel: string;
     termsLabel: string;
+    downloadLabel: string;
+    navLabel: string;
   };
   store: StoreLinks;
 };
