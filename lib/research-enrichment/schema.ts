@@ -69,6 +69,8 @@ export type EnrichmentOutput = {
     evidence: Evidence;
   };
   practicalInterpretation: TextAssessment;
+  seoTitle: TextAssessment;
+  seoDescription: TextAssessment;
   needsReview: boolean;
   reviewNote: string | null;
   abstractSufficient: boolean;
@@ -126,6 +128,8 @@ export const RESEARCH_ENRICHMENT_JSON_SCHEMA = {
     "mainFindings",
     "limitations",
     "practicalInterpretation",
+    "seoTitle",
+    "seoDescription",
     "needsReview",
     "reviewNote",
     "abstractSufficient",
@@ -218,6 +222,12 @@ export const RESEARCH_ENRICHMENT_JSON_SCHEMA = {
     practicalInterpretation: textAssessmentSchema(
       "Snacksmate plain-language interpretation. This is not the authors' conclusion. Do not give medical advice. If the effect was not statistically clear, the evidence is insufficient, or the results neither support nor refute an effect, do not say may improve, may affect, or may provide benefits. Say the evidence is insufficient or the study did not establish a clear effect. If between-group differences were not significant, do not imply one intervention was superior.",
     ),
+    seoTitle: textAssessmentSchema(
+      "English search title of about 45 to 60 characters. Accurate and natural. Do not paste the full paper title, stuff keywords, use clickbait, invent a finding, or add Snacksmate unless the source uses that name. Null when a faithful title would not fit.",
+    ),
+    seoDescription: textAssessmentSchema(
+      "English search description of about 140 to 160 characters. Summarize the population or topic, what was investigated, and the finding or evidence status. Original wording. Do not copy the excerpt or the abstract. Use association language for observational studies. Keep uncertain or null results uncertain. No hype, medical advice, or claims that the study proves, guarantees, or cures anything. Null when those rules cannot be met.",
+    ),
     needsReview: {
       type: "boolean",
       description: "True when a human should check the draft before anyone relies on the summary.",
@@ -267,6 +277,8 @@ export function parseEnrichmentOutput(input: unknown): EnrichmentOutput {
       record.practicalInterpretation,
       "practicalInterpretation",
     ),
+    seoTitle: textAssessment(record.seoTitle, "seoTitle"),
+    seoDescription: textAssessment(record.seoDescription, "seoDescription"),
     needsReview: booleanValue(record.needsReview, "needsReview"),
     reviewNote: nullableString(record.reviewNote, "reviewNote"),
     abstractSufficient: booleanValue(record.abstractSufficient, "abstractSufficient"),

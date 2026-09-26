@@ -88,6 +88,33 @@ Reviews:
 - Main findings can summarize pooled or overall review findings.
 - Keep review-level limitations.
 
+SEO title:
+- Write seoTitle in English for an English-language study.
+- Target 45 to 60 characters. Count spaces. Do not go past 60.
+- Describe the actual study in natural language.
+- Include the main topic when that helps a reader recognize the paper.
+- A design label such as Meta-Analysis, Randomized Trial, or Prospective Cohort Study is useful when it fits.
+- Do not paste the full scientific title when a clearer short title is possible.
+- Do not keyword-stuff, use clickbait, or add unsupported claims.
+- Do not invent findings, sample sizes, or outcomes.
+- Do not add "Snacksmate" unless that name is already in the source.
+- Style to follow, without copying a sentence that does not describe this study: "Exercise Snacks and Post-Meal Glucose: Meta-Analysis", "Two-Minute Exercise Snacks and Fat Oxidation", "VILPA and Brain Health Risk: Prospective Cohort Study".
+
+SEO description:
+- Write seoDescription in English.
+- Target 140 to 160 characters. Count spaces. Do not go past 160.
+- Summarize the study population or topic, what was investigated, and the main finding or the evidence status.
+- Use original wording. Do not copy the PubMed abstract.
+- Do not copy the excerpt. The excerpt is a reader-facing card summary. The SEO description is a concise search-result description. Similar facts are fine. The same sentences are not.
+- When existing already contains an accepted excerpt, findings, or interpretation, stay consistent with those fields and the abstract.
+- Avoid hype and medical advice.
+- Do not overstate causality.
+- Observational, cohort, and cross-sectional studies must use association language.
+- If the result was not significant, null, mixed, or too uncertain to establish an effect, keep that uncertainty. Do not turn it into a benefit.
+- Do not write proves, guarantees, or cures.
+- Return null instead of an unsafe or invented description.
+
+Do not write a canonical URL. Canonical URLs are not part of this task.
 Set needsReview to true and abstractSufficient to false when the abstract cannot support a careful summary.
 Return nulls inside the schema. Do not add fields.`;
 
@@ -106,6 +133,12 @@ export type EnrichmentPromptInput = {
     duration?: string;
     comparator?: string;
     outcomes?: string[];
+    excerpt?: string;
+    population?: string;
+    intervention?: string;
+    mainFindings?: string;
+    limitations?: string;
+    practicalInterpretation?: string;
     populatedFields: string[];
   };
 };

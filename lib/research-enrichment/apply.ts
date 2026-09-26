@@ -131,6 +131,9 @@ export type ResearchDraftSnapshot = {
   mainFindings?: unknown;
   limitations?: unknown;
   practicalInterpretation?: unknown;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
+  language?: string | null;
   journal?: string | null;
   doi?: string | null;
   editorialStatus?: string | null;
@@ -172,6 +175,15 @@ export type EnrichmentPlan = {
   editorialStatusSet: boolean;
   /** Present only for an explicit --force run. Dry-run reporting uses this. */
   comparisons: FieldComparison[];
+  studyTitle: string;
+  seoTitle: SeoFieldReport;
+  seoDescription: SeoFieldReport;
+};
+
+export type SeoFieldReport = {
+  current: string;
+  proposed: string;
+  characters: number;
 };
 
 type PortableTextBlock = {
@@ -251,7 +263,7 @@ export function buildEnrichmentUpdate(input: {
     );
   }
 
-  const unchanged = new Set<string>(["title", "journal", "doi"]);
+  const unchanged = new Set<string>(["title", "journal", "doi", "canonicalUrl"]);
   const wouldSet: PlannedField[] = [];
   const leftEmpty: EmptyField[] = [];
   const set: Record<string, unknown> = {};
@@ -497,9 +509,43 @@ export function buildEnrichmentUpdate(input: {
     },
   });
 
+  const seoEvidence = `${input.source.abstract}\n${input.extraction.mainFindings.value ?? ""}`;
+  const excerptForSeo = [
+    fieldText("excerpt" in set ? set.excerpt : input.draft.excerpt),
+    input.extraction.excerpt.value ?? "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  for (const field of ["seoTitle", "seoDescription"] as const) {
+    const proposal = field === "seoTitle" ? input.extraction.seoTitle : input.extraction.seoDescription;
+    considerSeo({
+      field,
+      current: input.draft[field],
+      value: proposal.value,
+      confidence: proposal.confidence,
+      evidence: proposal.evidence,
+      draft: input.draft,
+      abstract: input.source.abstract,
+      excerpt: excerptForSeo,
+      sourceText: `${input.source.title}\n${input.source.abstract}`,
+      observational,
+      uncertain: evidenceIsUncertain(seoEvidence),
+      evidenceText: seoEvidence,
+      set,
+      wouldSet,
+      leftEmpty,
+      unchanged,
+      onReview: () => {
+        needsReview = true;
+      },
+    });
+  }
+
   const automationNote = reviseAutomationNote({
     current: input.draft.automationNote,
-    filled: wouldSet.map((field) => field.field),
+    filled: wouldSet
+      .map((field) => field.field)
+      .filter((field) => field !== "seoTitle" && field !== "seoDescription"),
     stillEmpty: leftEmpty.map((field) => field.field),
     humanLocked: isDocumentHumanReviewed(input.draft),
   });
@@ -542,6 +588,9 @@ export function buildEnrichmentUpdate(input: {
     abstractInsufficient: input.extraction.abstractSufficient === false,
     editorialStatusSet,
     comparisons: input.force ? auditComparisons(input.draft, set) : [],
+    studyTitle: input.draft.title?.trim() || input.source.title,
+    seoTitle: seoFieldReport(input.draft, set, "seoTitle"),
+    seoDescription: seoFieldReport(input.draft, set, "seoDescription"),
   };
 }
 
@@ -582,7 +631,7 @@ export function buildInsufficientAbstractPlan(input: {
     pmid: input.draft.pmid,
     set,
     wouldSet: [],
-    unchanged: ["title", "journal", "doi"],
+    unchanged: ["title", "journal", "doi", "canonicalUrl"],
     leftEmpty: [
       {
         field: "excerpt",
@@ -593,6 +642,9 @@ export function buildInsufficientAbstractPlan(input: {
     abstractInsufficient: true,
     editorialStatusSet,
     comparisons: [],
+    studyTitle: input.draft.title?.trim() || "",
+    seoTitle: seoFieldReport(input.draft, set, "seoTitle"),
+    seoDescription: seoFieldReport(input.draft, set, "seoDescription"),
   };
 }
 
@@ -609,6 +661,8 @@ export function hasEnrichableGap(draft: ResearchDraftSnapshot): boolean {
     draft.mainFindings,
     draft.limitations,
     draft.practicalInterpretation,
+    draft.seoTitle,
+    draft.seoDescription,
   ].some((value) => !hasContent(value));
 }
 
@@ -625,6 +679,8 @@ export function populatedFieldNames(draft: ResearchDraftSnapshot): string[] {
     ["mainFindings", draft.mainFindings],
     ["limitations", draft.limitations],
     ["practicalInterpretation", draft.practicalInterpretation],
+    ["seoTitle", draft.seoTitle],
+    ["seoDescription", draft.seoDescription],
   ];
   return fields.filter(([, value]) => hasContent(value)).map(([name]) => name);
 }
@@ -860,6 +916,244 @@ export function proseIssues(
     issues.push("missing explicit observational or association wording");
   }
   return issues;
+}
+
+const SEO_TITLE_MIN = 30;
+const SEO_TITLE_MAX = 70;
+const SEO_DESCRIPTION_MIN = 120;
+const SEO_DESCRIPTION_MAX = 180;
+const SEO_EVIDENCE: readonly Evidence[] = ["abstract", "metadata", "abstract_and_metadata"];
+const SEO_LOCKED_STATUSES = new Set([
+  "reviewed",
+  "ready_to_publish",
+  "published_manually",
+  "ready",
+  "published",
+]);
+const SEO_PLACEHOLDERS = new Set([
+  "n/a",
+  "na",
+  "tbd",
+  "todo",
+  "none",
+  "null",
+  "untitled",
+  "-",
+  "--",
+  "...",
+]);
+const SEO_CERTAINTY = /\b(proves?|proven|guarantees?|guaranteed|cures?|cured)\b/i;
+const SEO_PROMPT_LANGUAGE =
+  /\b(as an ai|system prompt|json schema|as a language model|ignore previous instructions)\b/i;
+const SEO_HYPE =
+  /\b(breakthrough|miracle|game[- ]changer|shocking|amazing|incredible|revolutionary|life[- ]changing|you won't believe)\b|!{2,}/i;
+const NULL_OR_UNCERTAIN =
+  /\b(?:null results?|no significant\b|not significant\b|not statistically significant|not statistically clear|no association\b|not associated\b|no clear (?:effect|difference|benefit)|remains uncertain|did not establish|neither support(?:ed)? nor refut(?:e|ed))\b/i;
+const UNCERTAINTY_LANGUAGE =
+  /\b(?:insufficient|uncertain|unclear|did not|no significant|not significant|no clear|no association|not associated|remains uncertain|did not establish)\b/i;
+const FIRM_BENEFIT =
+  /\b(?:improves?|improved|reduces?|reduced|lowers?|lowered|prevents?|prevented|benefits?)\b/i;
+const SEO_STOPWORDS = new Set([
+  "about",
+  "after",
+  "among",
+  "from",
+  "have",
+  "into",
+  "study",
+  "their",
+  "there",
+  "these",
+  "this",
+  "those",
+  "using",
+  "were",
+  "with",
+  "which",
+  "while",
+  "would",
+  "that",
+  "than",
+  "then",
+  "them",
+  "they",
+]);
+
+/**
+ * PubMed imports are English. Missing language is treated as English.
+ * Hebrew and any other language wait for a separate translation pass.
+ */
+export function isEnglishResearchLanguage(language: string | null | undefined): boolean {
+  const value = language?.trim() ?? "";
+  if (!value) return true;
+  return /^(en|en-[a-z]{2}|english)$/i.test(value);
+}
+
+export function seoIsHumanReviewed(status: string | null | undefined): boolean {
+  return SEO_LOCKED_STATUSES.has(status?.trim() ?? "");
+}
+
+/** A real editor value, as opposed to a blank or a placeholder token. */
+export function isMeaningfulSeoValue(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const text = value.replace(/\s+/g, " ").trim();
+  if (text.length < 3) return false;
+  return !SEO_PLACEHOLDERS.has(text.toLowerCase());
+}
+
+export function evidenceIsUncertain(evidenceText: string): boolean {
+  return UNESTABLISHED_EFFECT.test(evidenceText) || NULL_OR_UNCERTAIN.test(evidenceText);
+}
+
+export function seoMetadataIssues(input: {
+  field: "seoTitle" | "seoDescription";
+  value: string;
+  abstract: string;
+  excerpt: string;
+  sourceText: string;
+  observational: boolean;
+  uncertain: boolean;
+  evidenceText: string;
+}): string[] {
+  const text = input.value.replace(/\s+/g, " ").trim();
+  const issues: string[] = [];
+  const min = input.field === "seoTitle" ? SEO_TITLE_MIN : SEO_DESCRIPTION_MIN;
+  const max = input.field === "seoTitle" ? SEO_TITLE_MAX : SEO_DESCRIPTION_MAX;
+  if (text.length > max) issues.push(`length ${text.length} is too long`);
+  else if (text.length < min) issues.push(`length ${text.length} is outside the SEO target`);
+  if (SEO_CERTAINTY.test(text) || CAUSAL_WORDING.test(text)) issues.push("unsupported certainty");
+  if (SEO_PROMPT_LANGUAGE.test(text)) issues.push("prompt or system language");
+  if (SEO_HYPE.test(text)) issues.push("hype");
+  if (MEDICAL_ADVICE.test(text)) issues.push("medical advice");
+  if (repeatsKeyword(text, input.field === "seoTitle" ? 3 : 4)) issues.push("keyword stuffing");
+  if (/\bSnacksmate\b/i.test(text) && !/\bSnacksmate\b/i.test(input.sourceText)) {
+    issues.push("Snacksmate was not in the source");
+  }
+  if (copiesAbstractSentence(text, input.abstract)) issues.push("copied an abstract sentence");
+  if (repeatsExcerpt(text, input.excerpt)) issues.push("copied the excerpt");
+  if (input.field === "seoDescription" && input.observational && !CAUTIOUS_FRAMING.test(text)) {
+    issues.push("missing cautious observational wording");
+  }
+  if (input.field === "seoDescription" && input.uncertain) {
+    const firm = text
+      .split(/(?<=[.!?])\s+/)
+      .some((sentence) => positiveClaim(sentence, FIRM_BENEFIT));
+    if (firm || !UNCERTAINTY_LANGUAGE.test(text)) {
+      issues.push("uncertain or null finding stated too firmly");
+    }
+    issues.push(...practicalInterpretationIssues(text, input.evidenceText));
+  }
+  return issues;
+}
+
+/**
+ * Fill an empty SEO field from the structured response.
+ * A meaningful value already on the draft is kept, including under --force.
+ * Enrichment does not store per-field provenance, so force cannot safely
+ * tell an AI value from a later human edit. Human-reviewed drafts are not
+ * given new SEO text. canonicalUrl is never written.
+ */
+function considerSeo(input: {
+  field: "seoTitle" | "seoDescription";
+  current: unknown;
+  value: string | null;
+  confidence: Confidence;
+  evidence: Evidence;
+  draft: ResearchDraftSnapshot;
+  abstract: string;
+  excerpt: string;
+  sourceText: string;
+  observational: boolean;
+  uncertain: boolean;
+  evidenceText: string;
+  set: Record<string, unknown>;
+  wouldSet: PlannedField[];
+  leftEmpty: EmptyField[];
+  unchanged: Set<string>;
+  onReview: () => void;
+}) {
+  if (isMeaningfulSeoValue(input.current)) {
+    input.unchanged.add(input.field);
+    return;
+  }
+  if (seoIsHumanReviewed(input.draft.editorialStatus)) {
+    input.leftEmpty.push({ field: input.field, reason: "human-reviewed SEO was left empty" });
+    return;
+  }
+  if (!isEnglishResearchLanguage(input.draft.language)) {
+    input.leftEmpty.push({
+      field: input.field,
+      reason: "non-English SEO metadata is not generated automatically",
+    });
+    return;
+  }
+
+  const text = input.value?.replace(/\s+/g, " ").trim() ?? "";
+  if (!text) {
+    input.leftEmpty.push({ field: input.field, reason: "not stated" });
+    return;
+  }
+  if (!confidenceMeets(input.confidence, "medium")) {
+    input.leftEmpty.push({ field: input.field, reason: "low confidence" });
+    return;
+  }
+  if (!SEO_EVIDENCE.includes(input.evidence)) {
+    input.leftEmpty.push({
+      field: input.field,
+      reason: "not supported by the abstract or metadata",
+    });
+    return;
+  }
+
+  const issues = seoMetadataIssues({
+    field: input.field,
+    value: text,
+    abstract: input.abstract,
+    excerpt: input.excerpt,
+    sourceText: input.sourceText,
+    observational: input.observational,
+    uncertain: input.uncertain,
+    evidenceText: input.evidenceText,
+  });
+  if (issues.length > 0) {
+    input.leftEmpty.push({ field: input.field, reason: issues.join("; ") });
+    input.onReview();
+    return;
+  }
+
+  assign(input.set, input.wouldSet, input.field, text, text);
+}
+
+function repeatsKeyword(text: string, limit: number): boolean {
+  const counts = new Map<string, number>();
+  for (const word of text.toLowerCase().match(/[a-z]{4,}/g) ?? []) {
+    if (SEO_STOPWORDS.has(word)) continue;
+    const count = (counts.get(word) ?? 0) + 1;
+    counts.set(word, count);
+    if (count >= limit) return true;
+  }
+  return false;
+}
+
+function repeatsExcerpt(text: string, excerpt: string): boolean {
+  const candidate = normalizeSpace(text).toLowerCase();
+  const summary = normalizeSpace(excerpt).toLowerCase();
+  if (!candidate || !summary) return false;
+  if (candidate === summary) return true;
+  if (candidate.length >= 80 && summary.includes(candidate)) return true;
+  if (summary.length >= 80 && candidate.includes(summary)) return true;
+  return false;
+}
+
+function seoFieldReport(
+  draft: ResearchDraftSnapshot,
+  set: Record<string, unknown>,
+  field: "seoTitle" | "seoDescription",
+): SeoFieldReport {
+  const current = typeof draft[field] === "string" ? draft[field].replace(/\s+/g, " ").trim() : "";
+  const written = typeof set[field] === "string" ? set[field].replace(/\s+/g, " ").trim() : "";
+  const proposed = written || current;
+  return { current, proposed, characters: proposed.length };
 }
 
 const IDENTIFIED_REVIEW_DESIGNS: { pattern: RegExp; value: StudyDesignValue }[] = [
@@ -1314,6 +1608,9 @@ function buildNote(input: {
   }
   if (input.reviewNote?.trim()) {
     lines.push(`Review note: ${truncate(input.reviewNote.trim(), 400)}`);
+  }
+  if (input.wouldSet.some((field) => field.field === "seoTitle" || field.field === "seoDescription")) {
+    lines.push("SEO metadata generated.");
   }
   lines.push(editorialStatusNote(input.editorialStatusSet));
   lines.push("Public fields already filled by an editor were not overwritten.");
