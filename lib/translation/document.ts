@@ -70,7 +70,7 @@ export function matchingHebrewLink(
 export function linkingReviewNotes(source: Pick<EnglishLink, "translationSlug">): string[] {
   if (source.translationSlug?.trim()) return [];
   return [
-    "The English document has no translationSlug. The Hebrew draft uses the English slug as the shared key. The public language switch on the English page stays unavailable until that English field uses the same key.",
+    "The English document has no translationSlug. The Hebrew draft uses the English slug as the shared key, which the language switch can match.",
   ];
 }
 

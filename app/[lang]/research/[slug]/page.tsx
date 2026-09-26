@@ -36,10 +36,11 @@ export async function generateMetadata({
   const research = await getResearchByLanguageAndSlug(lang, slug);
   if (!research) notFound();
 
-  const translationKey = research.translationSlug?.trim();
-  const translation = translationKey
-    ? await getResearchTranslation(lang, slug, translationKey)
-    : null;
+  const translation = await getResearchTranslation(
+    lang,
+    slug,
+    research.translationSlug?.trim() || slug,
+  );
   return createResearchMetadata(lang, research, translation);
 }
 
@@ -54,10 +55,11 @@ export default async function ResearchItemPage({
 
   const items = await getResearchByLanguage(lang);
   const related = pickRelatedResearch(items, research);
-  const translationKey = research.translationSlug?.trim();
-  const translation = translationKey
-    ? await getResearchTranslation(lang, slug, translationKey)
-    : null;
+  const translation = await getResearchTranslation(
+    lang,
+    slug,
+    research.translationSlug?.trim() || slug,
+  );
   const [relatedArticle] = pickArticlesByTopic(
     await getArticlesByLanguage(lang),
     research.topic,
