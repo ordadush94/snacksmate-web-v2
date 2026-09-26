@@ -6,6 +6,7 @@ import {
   acceptedSampleSize,
   assertDraftDocumentId,
   buildEnrichmentUpdate,
+  buildInsufficientAbstractPlan,
   copiesAbstractSentence,
   enrichmentDraftId,
   omitInferredSessionCounts,
@@ -14,7 +15,7 @@ import {
 } from "./apply";
 import { buildResponsesRequest, requestResearchEnrichment } from "./openai";
 import { runResearchEnrichment, type PubmedEnrichmentRecord } from "./run";
-import { patchResearchDraft } from "./sanity";
+import { ELIGIBLE_DRAFTS_QUERY, patchResearchDraft } from "./sanity";
 import {
   EnrichmentValidationError,
   parseEnrichmentOutput,
@@ -419,12 +420,183 @@ test("dry-run never writes", async () => {
 });
 
 test("public research queries do not read enrichment internals", () => {
+  const internalFields = [
+    "aiEnrichedAt",
+    "aiModel",
+    "aiEnrichmentStatus",
+    "aiEnrichmentNote",
+    "editorialStatus",
+    "editorialReviewNote",
+    "editorialChecklist",
+    "reviewedAt",
+    "reviewedBy",
+    "reviewedMetadata",
+    "reviewedScientificSummary",
+    "reviewedPracticalInterpretation",
+    "reviewedLinks",
+  ];
   for (const query of [researchByLanguageQuery, researchByLanguageAndSlugQuery]) {
-    assert.equal(query.includes("aiEnrichedAt"), false);
-    assert.equal(query.includes("aiModel"), false);
-    assert.equal(query.includes("aiEnrichmentStatus"), false);
-    assert.equal(query.includes("aiEnrichmentNote"), false);
+    for (const field of internalFields) {
+      assert.equal(query.includes(field), false, field);
+    }
   }
+});
+
+test("successful enrichment sets needs_review only when editorial status is empty", async () => {
+  for (const status of [undefined, null, "", "   "]) {
+    const current = draft();
+    current.editorialStatus = status;
+    const plan = planFor(current, extraction());
+    assert.equal(plan.set.editorialStatus, "needs_review", JSON.stringify(status));
+    assert.equal(plan.editorialStatusSet, true);
+    assert.match(String(plan.set.aiEnrichmentNote), /Editorial status set to needs_review/);
+
+    const insufficient = buildInsufficientAbstractPlan({
+      draft: current,
+      model: MODEL,
+      enrichedAt: ENRICHED_AT,
+    });
+    assert.equal(insufficient.set.editorialStatus, "needs_review", JSON.stringify(status));
+    assert.equal(insufficient.editorialStatusSet, true);
+  }
+
+  let written: Record<string, unknown> | undefined;
+  const summary = await runResearchEnrichment({
+    dryRun: false,
+    model: MODEL,
+    eligibleCount: 1,
+    drafts: [draft()],
+    fetchRecords: async () => ({ records: [record()], errors: [] }),
+    complete: async () => extraction(),
+    writeDraft: async (_id, fields) => {
+      written = fields;
+    },
+    now: () => ENRICHED_AT,
+  });
+  assert.equal(summary.enriched, 1);
+  assert.equal(summary.failed, 0);
+  assert.equal(written?.editorialStatus, "needs_review");
+});
+
+test("human editorial status is never overwritten", () => {
+  for (const status of ["needs_review", "reviewed", "ready_to_publish", "published_manually"] as const) {
+    const current = draft();
+    current.editorialStatus = status;
+    const plan = planFor(current, extraction());
+    assert.equal("editorialStatus" in plan.set, false, status);
+    assert.equal(plan.editorialStatusSet, false, status);
+    assert.match(String(plan.set.aiEnrichmentNote), /Editorial status was left unchanged/);
+    assert.equal(typeof plan.set.excerpt, "string", status);
+
+    const insufficient = buildInsufficientAbstractPlan({
+      draft: current,
+      model: MODEL,
+      enrichedAt: ENRICHED_AT,
+    });
+    assert.equal("editorialStatus" in insufficient.set, false, status);
+    assert.equal(insufficient.editorialStatusSet, false, status);
+  }
+
+  const rejected = draft();
+  rejected.editorialStatus = "rejected";
+  assert.throws(
+    () => planFor(rejected, extraction()),
+    /Editorial status is rejected/,
+  );
+  assert.throws(
+    () =>
+      buildInsufficientAbstractPlan({
+        draft: rejected,
+        model: MODEL,
+        enrichedAt: ENRICHED_AT,
+      }),
+    /Editorial status is rejected/,
+  );
+});
+
+test("rejected drafts are skipped by enrichment", async () => {
+  const rejected = draft();
+  rejected.editorialStatus = "rejected";
+  let writes = 0;
+  let fetches = 0;
+  let aiCalls = 0;
+  const summary = await runResearchEnrichment({
+    dryRun: false,
+    model: MODEL,
+    eligibleCount: 1,
+    drafts: [rejected],
+    fetchRecords: async () => {
+      fetches += 1;
+      return { records: [record()], errors: [] };
+    },
+    complete: async () => {
+      aiCalls += 1;
+      return extraction();
+    },
+    writeDraft: async () => {
+      writes += 1;
+    },
+    now: () => ENRICHED_AT,
+  });
+
+  assert.equal(writes, 0);
+  assert.equal(fetches, 0);
+  assert.equal(aiCalls, 0);
+  assert.equal(summary.skipped, 1);
+  assert.equal(summary.enriched, 0);
+  assert.equal(summary.failed, 0);
+  assert.equal(summary.aiCalls, 0);
+  assert.match(ELIGIBLE_DRAFTS_QUERY, /editorialStatus != "rejected"/);
+  assert.match(ELIGIBLE_DRAFTS_QUERY, /_id in path\("drafts\.\*\*"\)/);
+});
+
+test("published documents are not modified as drafts", async () => {
+  const published = draft();
+  published._id = "research-pubmed-42";
+  let writes = 0;
+  let fetches = 0;
+  let aiCalls = 0;
+  const summary = await runResearchEnrichment({
+    dryRun: false,
+    model: MODEL,
+    eligibleCount: 1,
+    drafts: [published],
+    fetchRecords: async () => {
+      fetches += 1;
+      return { records: [record()], errors: [] };
+    },
+    complete: async () => {
+      aiCalls += 1;
+      return extraction();
+    },
+    writeDraft: async () => {
+      writes += 1;
+    },
+    now: () => ENRICHED_AT,
+  });
+
+  assert.equal(writes, 0);
+  assert.equal(fetches, 0);
+  assert.equal(aiCalls, 0);
+  assert.equal(summary.enriched, 0);
+  assert.equal(summary.failed, 1);
+  assert.equal(summary.proposedUpdates, 0);
+
+  let called = false;
+  await assert.rejects(() =>
+    patchResearchDraft(
+      {
+        patch() {
+          called = true;
+          throw new Error("should not patch");
+        },
+      } as unknown as SanityClient,
+      "research-pubmed-42",
+      { editorialStatus: "needs_review" },
+    ),
+  );
+  assert.equal(called, false);
+  assert.throws(() => assertDraftDocumentId("research-pubmed-42"));
 });
 
 test("OpenAI requests use structured Responses output and retry transient failures", async () => {

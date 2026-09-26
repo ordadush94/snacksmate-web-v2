@@ -3,7 +3,12 @@ import { createClient, type SanityClient } from "@sanity/client";
 import { findDuplicate, type ResearchIdentity } from "./dedupe";
 import type { ResearchDraft } from "./draft";
 
-const IDENTIFIERS_QUERY = `*[_type == "research"]{
+/**
+ * Every research document, including rejected drafts and unpublished drafts.
+ * Discovery uses this so a rejected study is not imported again.
+ * Editorial status is intentionally not a filter and not a reason to delete.
+ */
+export const RESEARCH_IDENTIFIERS_QUERY = `*[_type == "research"]{
   "id": _id,
   pmid,
   doi,
@@ -30,7 +35,7 @@ export function createSanityWriteClient(input: {
 export async function loadResearchIdentities(
   client: SanityClient,
 ): Promise<ResearchIdentity[]> {
-  const rows = await client.fetch<ResearchIdentity[]>(IDENTIFIERS_QUERY);
+  const rows = await client.fetch<ResearchIdentity[]>(RESEARCH_IDENTIFIERS_QUERY);
   return rows.filter((row) => row.id);
 }
 

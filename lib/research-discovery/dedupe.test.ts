@@ -71,6 +71,26 @@ test("matches an existing slug when identifiers and title differ", () => {
   assert.deepEqual(match, { id: "research-manual-1", reason: "slug" });
 });
 
+test("still matches a rejected research document", () => {
+  const match = findDuplicate(
+    {
+      id: "new",
+      pmid: "999",
+      title: "A different commentary title",
+      slug: "different-commentary",
+    },
+    [
+      {
+        id: "drafts.research-pubmed-999",
+        pmid: "999",
+        title: "Rejected commentary",
+        slug: "rejected-commentary",
+      },
+    ],
+  );
+  assert.deepEqual(match, { id: "drafts.research-pubmed-999", reason: "pmid" });
+});
+
 test("does not treat empty identifiers as duplicates", () => {
   const match = findDuplicate(
     { id: "new", title: "Brand new study", slug: "brand-new-study" },

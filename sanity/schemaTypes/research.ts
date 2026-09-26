@@ -1,5 +1,11 @@
-import {BookIcon} from '@sanity/icons'
-import {defineArrayMember, defineField, defineType} from 'sanity'
+import {BookIcon, CheckmarkCircleIcon, CloseCircleIcon, WarningOutlineIcon} from '@sanity/icons'
+import {defineArrayMember, defineField, defineType, type PreviewValue} from 'sanity'
+
+import {
+  editorialPreviewTone,
+  EDITORIAL_STATUS_OPTIONS,
+  researchPreviewSubtitle,
+} from '../../lib/research-editorial/status'
 
 const LANGUAGE_OPTIONS = [
   {title: 'English', value: 'en'},
@@ -100,8 +106,22 @@ export const researchType = defineType({
     {name: 'results', title: 'Results'},
     {name: 'interpretation', title: 'Interpretation'},
     {name: 'seo', title: 'SEO'},
+    {name: 'editorial', title: 'Editorial Review', icon: CheckmarkCircleIcon},
     {name: 'automation', title: 'Automation'},
   ],
+  validation: (rule) =>
+    rule
+      .custom((document) => {
+        const status =
+          document && typeof document === 'object' && 'aiEnrichmentStatus' in document
+            ? document.aiEnrichmentStatus
+            : undefined
+        if (status === 'needs_review') {
+          return 'AI enrichment needs review. Open Editorial Review and read the enrichment note before publishing.'
+        }
+        return true
+      })
+      .warning(),
   fields: [
     defineField({
       name: 'title',
@@ -251,7 +271,7 @@ export const researchType = defineType({
       name: 'importSource',
       title: 'Import source',
       type: 'string',
-      group: 'study',
+      group: 'automation',
       description: 'How this document entered the studio.',
       readOnly: true,
       options: {
@@ -267,7 +287,7 @@ export const researchType = defineType({
       name: 'importedAt',
       title: 'Imported at',
       type: 'datetime',
-      group: 'study',
+      group: 'automation',
       description: 'When discovery automation created this draft.',
       readOnly: true,
     }),
@@ -275,7 +295,7 @@ export const researchType = defineType({
       name: 'sourceQueries',
       title: 'Source queries',
       type: 'array',
-      group: 'study',
+      group: 'automation',
       description: 'Discovery queries that returned this study. Internal provenance only.',
       readOnly: true,
       of: [{type: 'string'}],
@@ -285,7 +305,7 @@ export const researchType = defineType({
       title: 'Automation note',
       type: 'text',
       rows: 4,
-      group: 'study',
+      group: 'automation',
       description:
         'Internal editorial note from discovery automation. This is not shown on the public research page.',
     }),
@@ -474,10 +494,84 @@ export const researchType = defineType({
         'Associates the Hebrew and English versions of the same research summary. Use the matching document slug or a shared key.',
     }),
     defineField({
+      name: 'editorialStatus',
+      title: 'Editorial status',
+      type: 'string',
+      group: 'editorial',
+      options: {
+        list: EDITORIAL_STATUS_OPTIONS.map((option) => ({...option})),
+        layout: 'radio',
+      },
+      description:
+        'Internal review state. Empty drafts are treated as Needs review. AI enrichment sets Needs review only when this is empty and never overwrites a status you have saved. Choosing Ready to publish does not publish the document. This is not shown on the public research page.',
+    }),
+    defineField({
+      name: 'editorialReviewNote',
+      title: 'Editorial review note',
+      type: 'text',
+      rows: 4,
+      group: 'editorial',
+      description:
+        'Internal note for the editor. Examples: verify sample size, simplify practical interpretation, check DOI, confirm intervention frequency, reject as commentary. This is not shown on the public research page.',
+    }),
+    defineField({
+      name: 'editorialChecklist',
+      title: 'Review checklist',
+      type: 'object',
+      group: 'editorial',
+      description:
+        'Optional. None of these are required before a manual publish. Internal only. This is not shown on the public research page.',
+      options: {
+        collapsible: true,
+        collapsed: false,
+      },
+      fields: [
+        defineField({
+          name: 'reviewedMetadata',
+          title: 'Metadata reviewed',
+          type: 'boolean',
+          description: 'Title, language, topic, year, DOI, and study URL.',
+        }),
+        defineField({
+          name: 'reviewedScientificSummary',
+          title: 'Scientific summary reviewed',
+          type: 'boolean',
+          description: 'Excerpt, study design, population, and main findings.',
+        }),
+        defineField({
+          name: 'reviewedPracticalInterpretation',
+          title: 'Practical interpretation reviewed',
+          type: 'boolean',
+        }),
+        defineField({
+          name: 'reviewedLinks',
+          title: 'Links reviewed',
+          type: 'boolean',
+          description: 'DOI, original study URL, and references.',
+        }),
+      ],
+    }),
+    defineField({
+      name: 'reviewedAt',
+      title: 'Reviewed at',
+      type: 'datetime',
+      group: 'editorial',
+      description:
+        'Optional. When an editor reviewed this draft. Internal only. This is not shown on the public research page.',
+    }),
+    defineField({
+      name: 'reviewedBy',
+      title: 'Reviewed by',
+      type: 'string',
+      group: 'editorial',
+      description:
+        'Optional. Name of the editor. Internal only. This is not shown on the public research page.',
+    }),
+    defineField({
       name: 'aiEnrichedAt',
       title: 'AI enriched at',
       type: 'datetime',
-      group: 'automation',
+      group: 'editorial',
       readOnly: true,
       description:
         'When enrichment last finished. Internal only. This is not shown on the public research page.',
@@ -486,7 +580,7 @@ export const researchType = defineType({
       name: 'aiModel',
       title: 'AI model',
       type: 'string',
-      group: 'automation',
+      group: 'editorial',
       readOnly: true,
       description:
         'Model id that produced the latest enrichment. Internal only. This is not shown on the public research page.',
@@ -495,7 +589,7 @@ export const researchType = defineType({
       name: 'aiEnrichmentStatus',
       title: 'AI enrichment status',
       type: 'string',
-      group: 'automation',
+      group: 'editorial',
       options: {
         list: [
           {title: 'Pending', value: 'pending'},
@@ -506,14 +600,23 @@ export const researchType = defineType({
         layout: 'radio',
       },
       description:
-        'Internal enrichment state. This is not shown on the public research page. Completed and Needs review drafts are skipped. Set this back to Pending to allow another run. A failed model call does not change this field.',
+        'Internal enrichment state. This is not shown on the public research page. Completed and Needs review drafts are skipped. Set this back to Pending to allow another run. A failed model call does not change this field. This does not change editorial status once an editor has saved one, and it never publishes.',
+      validation: (rule) =>
+        rule
+          .custom((value) => {
+            if (value === 'needs_review') {
+              return 'AI flagged this draft for human review. Read the enrichment note before publishing.'
+            }
+            return true
+          })
+          .warning(),
     }),
     defineField({
       name: 'aiEnrichmentNote',
       title: 'AI enrichment note',
       type: 'text',
       rows: 4,
-      group: 'automation',
+      group: 'editorial',
       description:
         'Internal editorial note from enrichment. This is not shown on the public research page.',
     }),
@@ -533,25 +636,53 @@ export const researchType = defineType({
   preview: {
     select: {
       title: 'title',
+      id: '_id',
       language: 'language',
       topic: 'topic',
       studyDesign: 'studyDesign',
       year: 'year',
+      editorialStatus: 'editorialStatus',
+      aiEnrichmentStatus: 'aiEnrichmentStatus',
       media: 'mainImage',
     },
-    prepare({title, language, topic, studyDesign, year, media}) {
+    prepare({
+      title,
+      id,
+      language,
+      topic,
+      studyDesign,
+      year,
+      editorialStatus,
+      aiEnrichmentStatus,
+      media,
+    }) {
       return {
         title: title || 'Untitled research',
-        subtitle: [
-          labelForOption(LANGUAGE_OPTIONS, language),
-          labelForOption(RESEARCH_TOPIC_OPTIONS, topic),
-          labelForOption(STUDY_DESIGN_OPTIONS, studyDesign),
-          year,
-        ]
-          .filter(Boolean)
-          .join(' · '),
-        media,
+        subtitle: researchPreviewSubtitle({
+          editorialStatus,
+          aiEnrichmentStatus,
+          documentId: id,
+          details: [
+            labelForOption(LANGUAGE_OPTIONS, language),
+            labelForOption(RESEARCH_TOPIC_OPTIONS, topic),
+            labelForOption(STUDY_DESIGN_OPTIONS, studyDesign),
+            year,
+          ],
+        }),
+        media: editorialPreviewMedia(editorialStatus, media, id),
       }
     },
   },
 })
+
+function editorialPreviewMedia(
+  status: string | undefined,
+  image: PreviewValue['media'],
+  documentId?: string,
+): PreviewValue['media'] {
+  const tone = editorialPreviewTone(status, documentId)
+  if (tone === 'needs_review') return WarningOutlineIcon
+  if (tone === 'ready_to_publish') return CheckmarkCircleIcon
+  if (tone === 'rejected') return CloseCircleIcon
+  return image
+}
