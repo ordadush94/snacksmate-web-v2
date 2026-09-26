@@ -1,4 +1,9 @@
 import { draftIdForPmid } from "../research-discovery/normalize";
+import {
+  editorialStatusAfterEnrichment,
+  editorialStatusNote,
+  isRejectedEditorialStatus,
+} from "../research-editorial/status";
 import type { Confidence, EnrichmentOutput, Evidence, StudyDesignValue } from "./schema";
 
 const DRAFT_ID_PATTERN = /^drafts\.research-pubmed-\d{1,9}$/;
@@ -59,6 +64,7 @@ export type ResearchDraftSnapshot = {
   practicalInterpretation?: unknown;
   journal?: string | null;
   doi?: string | null;
+  editorialStatus?: string | null;
 };
 
 export type EnrichmentSource = {
@@ -86,6 +92,7 @@ export type EnrichmentPlan = {
   leftEmpty: EmptyField[];
   status: "completed" | "needs_review";
   abstractInsufficient: boolean;
+  editorialStatusSet: boolean;
 };
 
 type PortableTextBlock = {
@@ -111,10 +118,24 @@ export function enrichmentDraftId(pmid: string): string {
   return id;
 }
 
+export function isEnrichmentDraftId(id: string): boolean {
+  return DRAFT_ID_PATTERN.test(id);
+}
+
 export function assertDraftDocumentId(id: string): void {
-  if (!DRAFT_ID_PATTERN.test(id)) {
+  if (!isEnrichmentDraftId(id)) {
     throw new Error(
       `Refusing to update "${id}". Enrichment only updates drafts.research-pubmed-{PMID} and never publishes.`,
+    );
+  }
+}
+
+export function assertRunnableEnrichmentDraft(draft: { _id: string; pmid: string }): void {
+  assertDraftDocumentId(draft._id);
+  const expected = enrichmentDraftId(draft.pmid);
+  if (draft._id !== expected) {
+    throw new Error(
+      `Draft ${draft._id} does not match ${expected}. Enrichment will not create or publish a document.`,
     );
   }
 }
@@ -137,6 +158,11 @@ export function buildEnrichmentUpdate(input: {
   if (input.draft._id !== draftId) {
     throw new Error(
       `Draft ${input.draft._id} does not match ${draftId}. Enrichment will not create a second document.`,
+    );
+  }
+  if (isRejectedEditorialStatus(input.draft.editorialStatus)) {
+    throw new Error(
+      `Refusing to enrich PMID ${input.draft.pmid}. Editorial status is rejected.`,
     );
   }
 
@@ -358,6 +384,7 @@ export function buildEnrichmentUpdate(input: {
   if (input.extraction.reviewNote?.trim()) needsReview = true;
 
   const status = needsReview ? "needs_review" : "completed";
+  const editorialStatusSet = assignEditorialStatusIfEmpty(set, input.draft.editorialStatus);
   const note = buildNote({
     model: input.model,
     status,
@@ -366,6 +393,7 @@ export function buildEnrichmentUpdate(input: {
     leftEmpty,
     reviewNote: input.extraction.reviewNote,
     abstractSufficient: input.extraction.abstractSufficient,
+    editorialStatusSet,
   });
 
   set.aiEnrichedAt = input.enrichedAt;
@@ -382,6 +410,7 @@ export function buildEnrichmentUpdate(input: {
     leftEmpty,
     status,
     abstractInsufficient: input.extraction.abstractSufficient === false,
+    editorialStatusSet,
   };
 }
 
@@ -396,23 +425,31 @@ export function buildInsufficientAbstractPlan(input: {
       `Draft ${input.draft._id} does not match ${draftId}. Enrichment will not create a second document.`,
     );
   }
+  if (isRejectedEditorialStatus(input.draft.editorialStatus)) {
+    throw new Error(
+      `Refusing to enrich PMID ${input.draft.pmid}. Editorial status is rejected.`,
+    );
+  }
 
+  const set: Record<string, unknown> = {
+    aiEnrichedAt: input.enrichedAt,
+    aiModel: input.model,
+    aiEnrichmentStatus: "needs_review",
+  };
+  const editorialStatusSet = assignEditorialStatusIfEmpty(set, input.draft.editorialStatus);
   const note = [
     `Model: ${input.model}`,
     "Status: needs_review",
     "The PubMed abstract was missing or too short to enrich this draft.",
     "No public fields were changed.",
+    editorialStatusNote(editorialStatusSet),
   ].join("\n");
+  set.aiEnrichmentNote = note;
 
   return {
     draftId,
     pmid: input.draft.pmid,
-    set: {
-      aiEnrichedAt: input.enrichedAt,
-      aiModel: input.model,
-      aiEnrichmentStatus: "needs_review",
-      aiEnrichmentNote: note,
-    },
+    set,
     wouldSet: [],
     unchanged: ["title", "journal", "doi"],
     leftEmpty: [
@@ -423,6 +460,7 @@ export function buildInsufficientAbstractPlan(input: {
     ],
     status: "needs_review",
     abstractInsufficient: true,
+    editorialStatusSet,
   };
 }
 
@@ -796,6 +834,16 @@ function assign(
   wouldSet.push({ field, preview: truncate(preview) });
 }
 
+function assignEditorialStatusIfEmpty(
+  set: Record<string, unknown>,
+  current: string | null | undefined,
+): boolean {
+  const next = editorialStatusAfterEnrichment(current);
+  if (!next) return false;
+  set.editorialStatus = next;
+  return true;
+}
+
 function buildNote(input: {
   model: string;
   status: "completed" | "needs_review";
@@ -804,6 +852,7 @@ function buildNote(input: {
   leftEmpty: EmptyField[];
   reviewNote: string | null;
   abstractSufficient: boolean;
+  editorialStatusSet: boolean;
 }): string {
   const filled = input.wouldSet.map((field) => field.field);
   const lines = [
@@ -828,6 +877,7 @@ function buildNote(input: {
   if (input.reviewNote?.trim()) {
     lines.push(`Review note: ${truncate(input.reviewNote.trim(), 400)}`);
   }
+  lines.push(editorialStatusNote(input.editorialStatusSet));
   lines.push("Public fields already filled by an editor were not overwritten.");
   return lines.join("\n");
 }

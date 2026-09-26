@@ -1,5 +1,7 @@
+import { isRejectedEditorialStatus } from "../research-editorial/status";
 import {
   abstractIsInsufficient,
+  assertRunnableEnrichmentDraft,
   buildEnrichmentUpdate,
   buildInsufficientAbstractPlan,
   hasEnrichableGap,
@@ -74,7 +76,33 @@ export async function runResearchEnrichment(input: {
     return summary;
   }
 
-  const fetched = await input.fetchRecords(input.drafts.map((draft) => draft.pmid));
+  const runnable: ResearchDraftSnapshot[] = [];
+  for (const draft of input.drafts) {
+    if (isRejectedEditorialStatus(draft.editorialStatus)) {
+      summary.skipped += 1;
+      console.log(
+        `PMID ${draft.pmid}: skipped. Editorial status is rejected. The draft was not changed.`,
+      );
+      continue;
+    }
+    try {
+      assertRunnableEnrichmentDraft(draft);
+    } catch (error) {
+      summary.failed += 1;
+      console.error(
+        `PMID ${draft.pmid}: ${errorMessage(error)} The document was not changed.`,
+      );
+      continue;
+    }
+    runnable.push(draft);
+  }
+
+  if (runnable.length === 0) {
+    printSummary(summary);
+    return summary;
+  }
+
+  const fetched = await input.fetchRecords(runnable.map((draft) => draft.pmid));
   const records = new Map(fetched.records.map((record) => [record.pmid, record]));
   for (const error of fetched.errors) {
     console.error(
@@ -82,7 +110,7 @@ export async function runResearchEnrichment(input: {
     );
   }
 
-  for (const draft of input.drafts) {
+  for (const draft of runnable) {
     summary.inspected += 1;
     const record = records.get(draft.pmid);
     if (!record) {
@@ -245,6 +273,11 @@ function printPlan(plan: EnrichmentPlan, dryRun: boolean) {
     }
   }
   console.log(`Internal status: ${plan.status}`);
+  console.log(
+    plan.editorialStatusSet
+      ? "Editorial status: needs_review (was empty)."
+      : "Editorial status: left unchanged.",
+  );
   if (dryRun) console.log("Sanity was not modified.");
 }
 

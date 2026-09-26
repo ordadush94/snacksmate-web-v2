@@ -7,9 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test lib/research-discovery/*.test.ts lib/research-enrichment/*.test.ts",
+    "test": "tsx --test lib/research-discovery/*.test.ts lib/research-enrichment/*.test.ts lib/research-editorial/*.test.ts",
     "research:discover": "tsx scripts/discover-research.ts",
-    "research:enrich": "tsx scripts/enrich-research.ts"
+    "research:enrich": "tsx scripts/enrich-research.ts",
+    "research:editorial-backfill": "tsx scripts/backfill-research-editorial-status.ts"
   },
   "dependencies": {
     "@portabletext/react": "^8.0.1",

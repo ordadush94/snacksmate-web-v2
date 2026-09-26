@@ -2,11 +2,12 @@ import type { SanityClient } from "@sanity/client";
 
 import { assertDraftDocumentId, enrichmentDraftId, type ResearchDraftSnapshot } from "./apply";
 
-const ELIGIBLE_DRAFTS_QUERY = `*[
+export const ELIGIBLE_DRAFTS_QUERY = `*[
   _type == "research" &&
   _id in path("drafts.**") &&
   importSource == "pubmed" &&
   defined(pmid) &&
+  editorialStatus != "rejected" &&
   (
     !defined(aiEnrichmentStatus) ||
     aiEnrichmentStatus == "pending" ||
@@ -29,7 +30,8 @@ const ELIGIBLE_DRAFTS_QUERY = `*[
   practicalInterpretation,
   journal,
   doi,
-  importSource
+  importSource,
+  editorialStatus
 }`;
 
 export async function loadEligibleResearchDrafts(
@@ -53,6 +55,7 @@ export async function patchResearchDraft(
   fields: Record<string, unknown>,
 ): Promise<void> {
   assertDraftDocumentId(id);
+  // Draft ids only. commit() here updates the draft and does not publish.
   await client.patch(id).set(fields).commit();
 }
 
@@ -95,6 +98,7 @@ function toSnapshot(value: unknown): ResearchDraftSnapshot | null {
     practicalInterpretation: row.practicalInterpretation,
     journal: optionalString(row.journal),
     doi: optionalString(row.doi),
+    editorialStatus: optionalString(row.editorialStatus),
   };
 }
 

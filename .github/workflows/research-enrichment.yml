@@ -4,6 +4,7 @@ name: Research enrichment
 # Dry-run is the default and must not modify Sanity.
 # A real run is possible only when dry_run is explicitly false.
 # Even then, only existing drafts.research-pubmed-{PMID} documents may be updated.
+# Rejected drafts are skipped. A stored editorial status is never overwritten.
 # This workflow never publishes.
 on:
   workflow_dispatch:
