@@ -36,6 +36,11 @@ export class PubmedUnavailableError extends Error {
 
 export type PubmedAuthor = string;
 
+export type PubmedCommentCorrection = {
+  refType: string;
+  pmid?: string;
+};
+
 export type PubmedRecord = {
   pmid: string;
   title: string;
@@ -47,6 +52,7 @@ export type PubmedRecord = {
   publishedAt?: string;
   doi?: string;
   publicationTypes: string[];
+  commentCorrections: PubmedCommentCorrection[];
   studyDesign?: StudyDesign;
   sampleSize?: number;
 };
@@ -291,6 +297,7 @@ const xmlParser = new XMLParser({
       "AbstractText",
       "PublicationType",
       "ArticleId",
+      "CommentsCorrections",
     ].includes(name),
 });
 
@@ -368,11 +375,29 @@ function parseArticle(article: unknown): PubmedRecord | null {
     }),
     doi,
     publicationTypes,
+    commentCorrections: commentCorrectionsFrom(citation),
     studyDesign:
       inferStudyDesignFromTitle(textContent(articleNode.ArticleTitle)) ??
       inferStudyDesign(publicationTypes),
     sampleSize: extractSampleSize(abstractSections),
   };
+}
+
+function commentCorrectionsFrom(citation: Record<string, unknown>): PubmedCommentCorrection[] {
+  const list = asRecord(citation.CommentsCorrectionsList);
+  const links: PubmedCommentCorrection[] = [];
+  for (const item of arrayOf(list?.CommentsCorrections)) {
+    const record = asRecord(item);
+    if (!record) continue;
+    const refType = stringAttr(record, "@_RefType");
+    if (!refType) continue;
+    const pmid = textContent(record.PMID);
+    links.push({
+      refType,
+      ...(pmid && /^\d+$/.test(pmid) ? { pmid } : {}),
+    });
+  }
+  return links;
 }
 
 function doiFrom(root: Record<string, unknown>, articleNode: Record<string, unknown>): string | undefined {
