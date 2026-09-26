@@ -133,8 +133,13 @@ export function ResearchLibrary({ locale, items }: ResearchLibraryProps) {
         </p>
       ) : (
         <div className="content-list">
-          {filtered.map((item) => (
-            <ResearchCard key={item._id} item={item} locale={locale} />
+          {filtered.map((item, index) => (
+            <ResearchCard
+              key={item._id}
+              item={item}
+              locale={locale}
+              featured={index === 0}
+            />
           ))}
         </div>
       )}

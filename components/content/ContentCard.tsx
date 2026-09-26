@@ -17,6 +17,7 @@ type ContentCardProps = {
   kicker?: string;
   chips?: string[];
   image?: ContentCardImage;
+  featured?: boolean;
 };
 
 export function ContentCard({
@@ -28,11 +29,12 @@ export function ContentCard({
   kicker,
   chips,
   image,
+  featured = false,
 }: ContentCardProps) {
   const visibleChips = chips?.map((chip) => chip.trim()).filter(Boolean);
 
   return (
-    <article className="content-card">
+    <article className={featured ? "content-card is-featured" : "content-card"}>
       {image ? (
         <Link href={href} className="content-card-image" tabIndex={-1}>
           <img

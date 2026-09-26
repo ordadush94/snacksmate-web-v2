@@ -16,7 +16,7 @@ import {
   researchPageJsonLd,
   scholarlyArticleJsonLd,
 } from "@/lib/research-seo";
-import { formatOutcomeList, stripEditorialLabels } from "@/lib/research-display";
+import { stripEditorialLabels } from "@/lib/research-display";
 import { absoluteUrl } from "@/lib/site";
 import {
   researchImageAlt,
@@ -52,6 +52,18 @@ function textValue(value?: string | null) {
   return trimmed || undefined;
 }
 
+function sameDestination(left?: string, right?: string) {
+  if (!left || !right) return false;
+  const normalize = (value: string) =>
+    value
+      .trim()
+      .replace(/^https?:\/\//i, "")
+      .replace(/^dx\./i, "")
+      .replace(/\/+$/, "")
+      .toLowerCase();
+  return normalize(left) === normalize(right);
+}
+
 export function ResearchDetail({
   research,
   locale,
@@ -69,12 +81,9 @@ export function ResearchDetail({
   const description =
     research.excerpt?.trim() || research.seoDescription?.trim();
   const displayTitle = research.seoTitle?.trim() || research.title;
-  const authors = research.studyAuthors?.map((name) => name.trim()).filter(Boolean);
-  const outcomes = research.outcomes?.map((item) => item.trim()).filter(Boolean);
   const journal = textValue(research.journal);
   const population = textValue(research.population);
   const duration = textValue(research.duration);
-  const comparator = textValue(research.comparator);
   const doi = textValue(research.doi);
   const studyUrl = textValue(research.studyUrl);
   const doiUrl = doiHref(doi);
@@ -89,8 +98,14 @@ export function ResearchDetail({
   const overviewRows: { label: string; value: string }[] = [
     { label: copy.studyTitleLabel, value: research.title },
   ];
-  if (authors?.length) {
-    overviewRows.push({ label: copy.studyAuthorsLabel, value: authors.join(", ") });
+  if (journal) {
+    overviewRows.push({ label: copy.journalLabel, value: journal });
+  }
+  if (research.year) {
+    overviewRows.push({ label: copy.yearLabel, value: String(research.year) });
+  }
+  if (design) {
+    overviewRows.push({ label: copy.studyDesignLabel, value: design });
   }
   if (population) {
     overviewRows.push({ label: copy.populationLabel, value: population });
@@ -103,15 +118,6 @@ export function ResearchDetail({
   }
   if (duration) {
     overviewRows.push({ label: copy.durationLabel, value: duration });
-  }
-  if (comparator) {
-    overviewRows.push({ label: copy.comparatorLabel, value: comparator });
-  }
-  if (outcomes?.length) {
-    const outcomeList = formatOutcomeList(outcomes);
-    if (outcomeList) {
-      overviewRows.push({ label: copy.outcomesLabel, value: outcomeList });
-    }
   }
   const limitations = hasPortableText(research.limitations)
     ? stripEditorialLabels(research.limitations)
@@ -244,7 +250,7 @@ export function ResearchDetail({
           </section>
         ) : null}
         {hasPortableText(research.mainFindings) ? (
-          <section className="research-section">
+          <section className="research-section research-findings">
             <h2>{copy.mainFindingsHeading}</h2>
             <div className="article-body">
               <ArticlePortableText value={research.mainFindings} />
@@ -264,7 +270,7 @@ export function ResearchDetail({
           </section>
         ) : null}
         {limitations && limitations.length > 0 ? (
-          <section className="research-section">
+          <section className="research-section research-limitations">
             <h2>{copy.limitationsHeading}</h2>
             <div className="article-body">
               <ArticlePortableText value={limitations} />
@@ -316,9 +322,15 @@ export function ResearchDetail({
             </ol>
           </section>
         ) : null}
-        {doiUrl || studyUrl ? (
+        {journal || doiUrl || studyUrl ? (
           <section className="research-original">
             <h2>{copy.originalStudyHeading}</h2>
+            {journal ? (
+              <p className="research-source-line">
+                <span>{copy.journalLabel}</span>
+                {journal}
+              </p>
+            ) : null}
             {doi && doiUrl ? (
               <p>
                 <a href={doiUrl} target="_blank" rel="noopener noreferrer">
@@ -326,14 +338,9 @@ export function ResearchDetail({
                 </a>
               </p>
             ) : null}
-            {studyUrl ? (
+            {studyUrl && !sameDestination(studyUrl, doiUrl) ? (
               <p>
-                <a
-                  className="btn btn-ghost research-original-link"
-                  href={studyUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
+                <a href={studyUrl} target="_blank" rel="noopener noreferrer">
                   {copy.viewOriginalStudy}
                 </a>
               </p>

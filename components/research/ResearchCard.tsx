@@ -15,14 +15,16 @@ import { ContentCard } from "@/components/content/ContentCard";
 type ResearchCardProps = {
   item: ResearchListItem;
   locale: Locale;
+  featured?: boolean;
 };
 
-export function ResearchCard({ item, locale }: ResearchCardProps) {
+export function ResearchCard({ item, locale, featured = false }: ResearchCardProps) {
   const copy = getResearchCopy(locale);
   const href = researchItemPath(locale, item.slug);
   const topic = researchTopicLabel(item.topic, locale);
   const design = studyDesignLabel(item.studyDesign, locale);
   const imageUrl = researchImageUrl(item.mainImage, 960, 540);
+  const title = item.seoTitle?.trim() || item.title;
   const details = [
     item.journal?.trim(),
     item.year,
@@ -34,7 +36,8 @@ export function ResearchCard({ item, locale }: ResearchCardProps) {
   return (
     <ContentCard
       href={href}
-      title={item.title}
+      title={title}
+      featured={featured}
       linkLabel={copy.readResearch}
       takeaway={item.excerpt}
       chips={[topic, design].filter((chip): chip is string => Boolean(chip))}
@@ -42,7 +45,7 @@ export function ResearchCard({ item, locale }: ResearchCardProps) {
         imageUrl
           ? {
               src: imageUrl,
-              alt: researchImageAlt(item.mainImage, item.title),
+              alt: researchImageAlt(item.mainImage, title),
               width: 960,
               height: 540,
             }
