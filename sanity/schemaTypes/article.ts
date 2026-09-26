@@ -246,6 +246,52 @@ export const articleType = defineType({
       description:
         'Used later to associate Hebrew and English versions of the same article.',
     }),
+    defineField({
+      name: 'translationSourceId',
+      title: 'Translation source id',
+      type: 'string',
+      readOnly: true,
+      description:
+        'Published English document id this Hebrew draft was localized from. Internal only. This is not shown on the public page.',
+    }),
+    defineField({
+      name: 'translatedAt',
+      title: 'Translated at',
+      type: 'datetime',
+      readOnly: true,
+      description:
+        'When Hebrew localization created this draft. Internal only. This is not shown on the public page.',
+    }),
+    defineField({
+      name: 'translationModel',
+      title: 'Translation model',
+      type: 'string',
+      readOnly: true,
+      description:
+        'Model id that wrote this Hebrew draft. Internal only. This is not shown on the public page.',
+    }),
+    defineField({
+      name: 'translationStatus',
+      title: 'Translation status',
+      type: 'string',
+      options: {
+        list: [
+          {title: 'Needs review', value: 'needs_review'},
+          {title: 'Reviewed', value: 'reviewed'},
+        ],
+        layout: 'radio',
+      },
+      description:
+        'Internal review state for a Hebrew localization. New translations stay Needs review until a person checks them. This is not shown on the public page and it never publishes the document.',
+    }),
+    defineField({
+      name: 'translationReviewNote',
+      title: 'Translation review note',
+      type: 'text',
+      rows: 4,
+      description:
+        'Internal notes for the Hebrew reviewer. This is not shown on the public page.',
+    }),
   ],
   preview: {
     select: {
