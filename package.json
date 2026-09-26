@@ -7,8 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test lib/research-discovery/*.test.ts",
-    "research:discover": "tsx scripts/discover-research.ts"
+    "test": "tsx --test lib/research-discovery/*.test.ts lib/research-enrichment/*.test.ts",
+    "research:discover": "tsx scripts/discover-research.ts",
+    "research:enrich": "tsx scripts/enrich-research.ts"
   },
   "dependencies": {
     "@portabletext/react": "^8.0.1",

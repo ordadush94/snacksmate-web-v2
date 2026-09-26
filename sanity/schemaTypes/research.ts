@@ -97,6 +97,7 @@ export const researchType = defineType({
     {name: 'results', title: 'Results'},
     {name: 'interpretation', title: 'Interpretation'},
     {name: 'seo', title: 'SEO'},
+    {name: 'automation', title: 'Automation'},
   ],
   fields: [
     defineField({
@@ -468,6 +469,50 @@ export const researchType = defineType({
       group: 'seo',
       description:
         'Associates the Hebrew and English versions of the same research summary. Use the matching document slug or a shared key.',
+    }),
+    defineField({
+      name: 'aiEnrichedAt',
+      title: 'AI enriched at',
+      type: 'datetime',
+      group: 'automation',
+      readOnly: true,
+      description:
+        'When enrichment last finished. Internal only. This is not shown on the public research page.',
+    }),
+    defineField({
+      name: 'aiModel',
+      title: 'AI model',
+      type: 'string',
+      group: 'automation',
+      readOnly: true,
+      description:
+        'Model id that produced the latest enrichment. Internal only. This is not shown on the public research page.',
+    }),
+    defineField({
+      name: 'aiEnrichmentStatus',
+      title: 'AI enrichment status',
+      type: 'string',
+      group: 'automation',
+      options: {
+        list: [
+          {title: 'Pending', value: 'pending'},
+          {title: 'Completed', value: 'completed'},
+          {title: 'Failed', value: 'failed'},
+          {title: 'Needs review', value: 'needs_review'},
+        ],
+        layout: 'radio',
+      },
+      description:
+        'Internal enrichment state. This is not shown on the public research page. Completed and Needs review drafts are skipped. Set this back to Pending to allow another run. A failed model call does not change this field.',
+    }),
+    defineField({
+      name: 'aiEnrichmentNote',
+      title: 'AI enrichment note',
+      type: 'text',
+      rows: 4,
+      group: 'automation',
+      description:
+        'Internal editorial note from enrichment. This is not shown on the public research page.',
     }),
   ],
   orderings: [
