@@ -12,7 +12,20 @@ import {
 const EUTILS_ORIGIN = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils";
 const PAGE_SIZE = 200;
 const MAX_IDS_PER_QUERY = 400;
-const FETCH_BATCH_SIZE = 80;
+/** NCBI accepts large EFetch id lists; 200 stays within a normal GET URL. */
+const FETCH_BATCH_SIZE = 200;
+/**
+ * Without an API key NCBI's published ceiling is 3 requests/second.
+ * 600 ms keeps every 1-second window at 2 requests or fewer.
+ */
+const MIN_INTERVAL_WITHOUT_API_KEY_MS = 600;
+/**
+ * With an API key NCBI's published ceiling is 10 requests/second.
+ * 150 ms stays under a conservative 8 requests/second.
+ */
+const MIN_INTERVAL_WITH_API_KEY_MS = 150;
+const MAX_ATTEMPTS = 5;
+const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
 
 export class PubmedUnavailableError extends Error {
   constructor(message: string) {
@@ -50,6 +63,7 @@ export type PubmedClientOptions = {
   lookbackDays: number;
   fetchImpl?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
+  now?: () => number;
 };
 
 type ESearchResult = {
@@ -64,15 +78,25 @@ type ESearchResult = {
 export function createPubmedClient(options: PubmedClientOptions) {
   const fetchImpl = options.fetchImpl ?? fetch;
   const sleep = options.sleep ?? defaultSleep;
-  const minIntervalMs = options.apiKey ? 120 : 400;
-  let lastRequestAt = 0;
+  const now = options.now ?? Date.now;
+  const minIntervalMs = options.apiKey
+    ? MIN_INTERVAL_WITH_API_KEY_MS
+    : MIN_INTERVAL_WITHOUT_API_KEY_MS;
+  let lastRequestAt: number | null = null;
+  const recordCache = new Map<string, PubmedRecord>();
 
   async function pace() {
-    const elapsed = Date.now() - lastRequestAt;
-    if (lastRequestAt > 0 && elapsed < minIntervalMs) {
-      await sleep(minIntervalMs - elapsed);
+    if (lastRequestAt !== null) {
+      const elapsed = now() - lastRequestAt;
+      if (elapsed < minIntervalMs) {
+        await sleep(minIntervalMs - elapsed);
+      }
     }
-    lastRequestAt = Date.now();
+    lastRequestAt = now();
+  }
+
+  async function requestText(url: string): Promise<string> {
+    return getText(url, fetchImpl, pace, sleep, now);
   }
 
   function identification(): Record<string, string> {
@@ -102,7 +126,7 @@ export function createPubmedClient(options: PubmedClientOptions) {
         ...identification(),
       });
       const url = `${EUTILS_ORIGIN}/esearch.fcgi?${params.toString()}`;
-      const body = await getText(url, fetchImpl, pace);
+      const body = await requestText(url);
       let parsed: ESearchResult;
       try {
         parsed = JSON.parse(body) as ESearchResult;
@@ -137,18 +161,19 @@ export function createPubmedClient(options: PubmedClientOptions) {
       }
     } while (retstart < total);
 
-    return ids.slice(0, MAX_IDS_PER_QUERY);
+    return uniquePmids(ids).slice(0, MAX_IDS_PER_QUERY);
   }
 
   async function fetchRecords(pmids: string[]): Promise<{
     records: PubmedRecord[];
     errors: { pmid?: string; message: string }[];
   }> {
-    const records: PubmedRecord[] = [];
+    const unique = uniquePmids(pmids);
+    const missing = unique.filter((pmid) => !recordCache.has(pmid));
     const errors: { pmid?: string; message: string }[] = [];
 
-    for (let index = 0; index < pmids.length; index += FETCH_BATCH_SIZE) {
-      const batch = pmids.slice(index, index + FETCH_BATCH_SIZE);
+    for (let index = 0; index < missing.length; index += FETCH_BATCH_SIZE) {
+      const batch = missing.slice(index, index + FETCH_BATCH_SIZE);
       const params = new URLSearchParams({
         db: "pubmed",
         id: batch.join(","),
@@ -156,10 +181,18 @@ export function createPubmedClient(options: PubmedClientOptions) {
         ...identification(),
       });
       const url = `${EUTILS_ORIGIN}/efetch.fcgi?${params.toString()}`;
-      const xml = await getText(url, fetchImpl, pace);
+      const xml = await requestText(url);
       const parsed = parsePubmedFetchXml(xml);
-      records.push(...parsed.records);
+      for (const record of parsed.records) {
+        recordCache.set(record.pmid, record);
+      }
       errors.push(...parsed.errors);
+    }
+
+    const records: PubmedRecord[] = [];
+    for (const pmid of unique) {
+      const record = recordCache.get(pmid);
+      if (record) records.push(record);
     }
 
     return { records, errors };
@@ -172,28 +205,83 @@ export async function getText(
   url: string,
   fetchImpl: typeof fetch,
   pace: () => Promise<void>,
+  sleep: (ms: number) => Promise<void> = defaultSleep,
+  now: () => number = Date.now,
 ): Promise<string> {
-  await pace();
-  let response: Response;
-  try {
-    response = await fetchImpl(url, {
-      headers: {
-        "user-agent": "snacksmate-research-discovery",
-      },
-      signal: AbortSignal.timeout(30_000),
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "network error";
-    throw new PubmedUnavailableError(`PubMed request failed: ${message}`);
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    await pace();
+    let response: Response;
+    try {
+      response = await fetchImpl(url, {
+        headers: {
+          "user-agent": "snacksmate-research-discovery",
+        },
+        signal: AbortSignal.timeout(30_000),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "network error";
+      throw new PubmedUnavailableError(`PubMed request failed: ${message}`);
+    }
+
+    if (response.ok) {
+      return response.text();
+    }
+
+    const retryable = RETRYABLE_STATUSES.has(response.status);
+    if (!retryable || attempt === MAX_ATTEMPTS) {
+      const attempts = retryable ? ` after ${MAX_ATTEMPTS} attempts` : "";
+      throw new PubmedUnavailableError(
+        `PubMed request failed with HTTP ${response.status}${attempts}.`,
+      );
+    }
+
+    const delay = retryDelayMs(response, attempt, now);
+    console.warn(
+      `PubMed ${response.status} — retrying in ${delay} ms (attempt ${attempt}/${MAX_ATTEMPTS})`,
+    );
+    await consumeBody(response);
+    await sleep(delay);
   }
 
-  const body = await response.text();
-  if (!response.ok) {
-    throw new PubmedUnavailableError(
-      `PubMed request failed with HTTP ${response.status}.`,
-    );
+  throw new PubmedUnavailableError(
+    `PubMed request failed with HTTP 429 after ${MAX_ATTEMPTS} attempts.`,
+  );
+}
+
+function retryDelayMs(response: Response, attempt: number, now: () => number): number {
+  const fallback = 1000 * 2 ** (attempt - 1);
+  const header = response.headers.get("retry-after")?.trim();
+  if (!header) return fallback;
+
+  if (/^\d+(\.\d+)?$/.test(header)) {
+    return Math.max(0, Math.round(Number(header) * 1000));
   }
-  return body;
+
+  const dateMs = Date.parse(header);
+  if (Number.isFinite(dateMs)) {
+    return Math.max(0, dateMs - now());
+  }
+
+  return fallback;
+}
+
+async function consumeBody(response: Response): Promise<void> {
+  try {
+    await response.text();
+  } catch {
+    // The status is already known. A body read failure should not hide the retry.
+  }
+}
+
+function uniquePmids(pmids: string[]): string[] {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const pmid of pmids) {
+    if (!pmid || seen.has(pmid)) continue;
+    seen.add(pmid);
+    unique.push(pmid);
+  }
+  return unique;
 }
 
 const xmlParser = new XMLParser({
