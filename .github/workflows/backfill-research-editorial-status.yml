@@ -1,0 +1,124 @@
+name: Backfill research editorial status
+
+# One-shot manual data fix. Runs only when this branch is pushed.
+# Sets editorialStatus on existing AI-enriched PubMed drafts. Never publishes.
+on:
+  push:
+    branches:
+      - cursor/backfill-editorial-status-a960
+
+permissions:
+  contents: read
+
+jobs:
+  backfill:
+    name: Backfill empty editorial status
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Dry-run backfill
+        env:
+          SANITY_WRITE_TOKEN: ${{ secrets.SANITY_WRITE_TOKEN }}
+          NEXT_PUBLIC_SANITY_PROJECT_ID: 8wc8eouj
+          NEXT_PUBLIC_SANITY_DATASET: production
+          NEXT_PUBLIC_SANITY_API_VERSION: "2026-09-22"
+        run: |
+          set -euo pipefail
+          npm run research:editorial-backfill | tee /tmp/editorial-backfill-dry.txt
+          for pmid in 42652914 42707187 42722087 42798426 42783760 42786495; do
+            grep -q "Would set drafts.research-pubmed-${pmid} editorialStatus to needs_review." /tmp/editorial-backfill-dry.txt
+          done
+
+      - name: Write editorial status
+        env:
+          SANITY_WRITE_TOKEN: ${{ secrets.SANITY_WRITE_TOKEN }}
+          NEXT_PUBLIC_SANITY_PROJECT_ID: 8wc8eouj
+          NEXT_PUBLIC_SANITY_DATASET: production
+          NEXT_PUBLIC_SANITY_API_VERSION: "2026-09-22"
+        run: npm run research:editorial-backfill -- --write
+
+      - name: Verify drafts and Needs Review filter
+        env:
+          SANITY_WRITE_TOKEN: ${{ secrets.SANITY_WRITE_TOKEN }}
+        run: |
+          node --input-type=module <<'EOF'
+          import { createClient } from "@sanity/client";
+
+          const pmids = ["42652914", "42707187", "42722087", "42798426", "42783760", "42786495"];
+          const draftIds = pmids.map((pmid) => `drafts.research-pubmed-${pmid}`);
+          const publishedIds = pmids.map((pmid) => `research-pubmed-${pmid}`);
+          const token = process.env.SANITY_WRITE_TOKEN?.trim();
+          if (!token) {
+            console.error("SANITY_WRITE_TOKEN is missing.");
+            process.exit(1);
+          }
+
+          const raw = createClient({
+            projectId: "8wc8eouj",
+            dataset: "production",
+            apiVersion: "2026-09-22",
+            token,
+            useCdn: false,
+            perspective: "raw",
+          });
+          const draftsPerspective = raw.withConfig({ perspective: "drafts" });
+          const needsReview = '_type == "research" && (editorialStatus == "needs_review" || (!defined(editorialStatus) && _id in path("drafts.**")))';
+
+          const docs = await raw.fetch(
+            `*[_id in $ids]{ _id, _type, pmid, aiEnrichmentStatus, editorialStatus, importSource }`,
+            { ids: [...draftIds, ...publishedIds] },
+          );
+          const publishedResearch = await raw.fetch(
+            `count(*[_type == "research" && !(_id in path("drafts.**"))])`,
+          );
+          const articleCount = await raw.fetch(`count(*[_type == "article"])`);
+          const list = await draftsPerspective.fetch(
+            `*[${needsReview}]{ _id, _originalId, pmid, editorialStatus, importSource, aiEnrichmentStatus }`,
+          );
+
+          const byId = new Map(docs.map((doc) => [doc._id, doc]));
+          const failures = [];
+          for (const id of draftIds) {
+            const doc = byId.get(id);
+            if (!doc) failures.push(`${id} missing`);
+            else if (doc.editorialStatus !== "needs_review") {
+              failures.push(`${id} editorialStatus=${doc.editorialStatus ?? "unset"}`);
+            } else if (doc.importSource !== "pubmed") {
+              failures.push(`${id} importSource=${doc.importSource ?? "unset"}`);
+            }
+          }
+          for (const id of publishedIds) {
+            if (byId.has(id)) failures.push(`${id} was published`);
+          }
+          if (publishedResearch !== 0) failures.push(`published research count ${publishedResearch}`);
+
+          const listed = new Set(list.map((doc) => doc._originalId || doc._id));
+          for (const id of draftIds) {
+            if (!listed.has(id)) failures.push(`${id} missing from Needs Review perspective`);
+          }
+
+          console.log(JSON.stringify({
+            drafts: draftIds.map((id) => byId.get(id) ?? { _id: id, missing: true }),
+            publishedResearch,
+            articleCount,
+            needsReviewCount: list.length,
+            needsReviewIds: [...listed],
+          }, null, 2));
+
+          if (failures.length > 0) {
+            console.error(failures.join("\n"));
+            process.exit(1);
+          }
+          EOF
