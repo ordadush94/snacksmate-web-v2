@@ -3,7 +3,7 @@ import { createCrossrefClient } from "./crossref";
 import { buildResearchDraft } from "./draft";
 import { normalizeDoi } from "./normalize";
 import { createPubmedClient, PubmedUnavailableError, type PubmedRecord } from "./pubmed";
-import { assessRelevance } from "./relevance";
+import { assessRelevance, type RelevanceDecision } from "./relevance";
 import {
   createResearchDraft,
   createSanityWriteClient,
@@ -19,8 +19,9 @@ export type DiscoverySummary = {
   queriesRun: number;
   pubmedRecordsFound: number;
   duplicatesSkipped: number;
-  rejectedAsIrrelevant: number;
-  draftsCreated: number;
+  rejected: number;
+  reviewCandidates: number;
+  autoDraftCandidates: number;
   errors: number;
 };
 
@@ -46,8 +47,9 @@ export async function runResearchDiscovery(
     queriesRun: 0,
     pubmedRecordsFound: 0,
     duplicatesSkipped: 0,
-    rejectedAsIrrelevant: 0,
-    draftsCreated: 0,
+    rejected: 0,
+    reviewCandidates: 0,
+    autoDraftCandidates: 0,
     errors: 0,
   };
 
@@ -115,12 +117,27 @@ async function processRecord(input: {
   sanity: ReturnType<typeof createSanityWriteClient>;
   summary: DiscoverySummary;
 }) {
-  const relevance = assessRelevance(input.record.title, input.record.abstract);
-  console.log(`PMID ${input.record.pmid}: ${relevance.reason}`);
-  if (!relevance.accept) {
-    input.summary.rejectedAsIrrelevant += 1;
+  const relevance = assessRelevance({
+    title: input.record.title,
+    abstract: input.record.abstract,
+    abstractSections: input.record.abstractSections,
+    publicationTypes: input.record.publicationTypes,
+    commentCorrections: input.record.commentCorrections,
+  });
+
+  if (relevance.disposition === "reject") {
+    input.summary.rejected += 1;
+    logClassification("REJECT", input.record.pmid, input.record.title, relevance);
     return;
   }
+
+  if (relevance.disposition === "review_candidate") {
+    input.summary.reviewCandidates += 1;
+    logClassification("REVIEW", input.record.pmid, input.record.title, relevance);
+    return;
+  }
+
+  logClassification("AUTO_DRAFT", input.record.pmid, input.record.title, relevance);
 
   const doi = normalizeDoi(input.record.doi);
   let crossrefMetadata = null;
@@ -156,7 +173,7 @@ async function processRecord(input: {
   }
 
   if (input.dryRun) {
-    input.summary.draftsCreated += 1;
+    input.summary.autoDraftCandidates += 1;
     console.log(
       `Would create ${draft._id} — ${draft.title} [${draft.topic}]`,
     );
@@ -164,6 +181,7 @@ async function processRecord(input: {
     return;
   }
 
+  // Review candidates and rejections return above. Only AUTO_DRAFT reaches Sanity.
   const result = await createResearchDraft(input.sanity, draft);
   if (result === "duplicate") {
     input.summary.duplicatesSkipped += 1;
@@ -171,9 +189,23 @@ async function processRecord(input: {
     return;
   }
 
-  input.summary.draftsCreated += 1;
+  input.summary.autoDraftCandidates += 1;
   console.log(`Draft created: ${draft._id} — ${draft.title}`);
   input.existing.push(identityFromDraft(draft));
+}
+
+function logClassification(
+  label: "AUTO_DRAFT" | "REVIEW" | "REJECT",
+  pmid: string,
+  title: string,
+  decision: RelevanceDecision,
+) {
+  console.log(`${label} — PMID ${pmid}`);
+  console.log(`Reason: ${decision.reason}`);
+  console.log(`Title: ${title}`);
+  for (const correctedPmid of decision.correctedPmids) {
+    console.log(`Corrects PMID ${correctedPmid}`);
+  }
 }
 
 function identityFromDraft(draft: {
@@ -198,12 +230,11 @@ function printSummary(summary: DiscoverySummary) {
   console.log(`  Mode: ${summary.dryRun ? "dry-run" : "create drafts"}`);
   console.log(`  Lookback days: ${summary.lookbackDays}`);
   console.log(`  Queries run: ${summary.queriesRun}`);
-  console.log(`  PubMed records found: ${summary.pubmedRecordsFound}`);
-  console.log(`  Duplicates skipped: ${summary.duplicatesSkipped}`);
-  console.log(`  Rejected as irrelevant: ${summary.rejectedAsIrrelevant}`);
-  console.log(
-    `  ${summary.dryRun ? "Drafts that would be created" : "New drafts created"}: ${summary.draftsCreated}`,
-  );
+  console.log(`  Records found: ${summary.pubmedRecordsFound}`);
+  console.log(`  Auto-draft candidates: ${summary.autoDraftCandidates}`);
+  console.log(`  Review candidates: ${summary.reviewCandidates}`);
+  console.log(`  Rejected: ${summary.rejected}`);
+  console.log(`  Duplicates: ${summary.duplicatesSkipped}`);
   console.log(`  Errors: ${summary.errors}`);
 }
 

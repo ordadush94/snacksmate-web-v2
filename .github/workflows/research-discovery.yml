@@ -2,6 +2,7 @@ name: Research Discovery
 
 # SAFETY: every scheduled run is dry-run only and must not create or modify Sanity documents.
 # A real draft-creation run is possible only from workflow_dispatch when "dry_run" is explicitly false.
+# Even then, only AUTO_DRAFT records may be written. REVIEW_CANDIDATE records are never written.
 # The manual dry-run input defaults to true.
 on:
   workflow_dispatch:
@@ -55,6 +56,7 @@ jobs:
         run: |
           echo "Scheduled Monday/Thursday runs always use --dry-run."
           echo "Manual runs create Sanity drafts only when dry-run is explicitly disabled."
+          echo "Only AUTO_DRAFT records can create Sanity drafts. REVIEW_CANDIDATE records are never written."
           if [ "$WRITE_DRAFTS" = "true" ]; then
             echo "Mode: create Sanity drafts (manual opt-in)."
             npm run research:discover
