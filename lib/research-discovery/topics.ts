@@ -21,7 +21,7 @@ export const TOPIC_RULES: readonly TopicRule[] = [
   {
     topic: "exercise-snacks",
     label: "Exercise Snacks",
-    pattern: /\bexercise[\s-]+snack(?:s|ing)?\b/i,
+    pattern: /\bexercise[\s"'“”‘’-]+snack(?:s|ing)?\b/i,
   },
   {
     topic: "sedentary-behavior",

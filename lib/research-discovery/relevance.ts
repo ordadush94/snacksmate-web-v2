@@ -27,7 +27,7 @@ const STRONG_RULES: readonly RelevanceRule[] = [
   {
     id: "exercise-snacks",
     label: "exercise snacks / exercise snacking",
-    pattern: /\bexercise[\s-]+snack(?:s|ing)?\b/i,
+    pattern: /\bexercise[\s"'“”‘’-]+snack(?:s|ing)?\b/i,
   },
   {
     id: "activity-snacks",

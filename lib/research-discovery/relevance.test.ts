@@ -55,6 +55,13 @@ test("auto-drafts a title that contains Exercise Snacks", () => {
   assert.equal(decision.disposition, "auto_draft");
   assert.equal(decision.reason, "core phrase in title");
   assert.ok(decision.rules.includes("exercise-snacks"));
+
+  const quoted = assessRelevance({
+    title: 'Effect of prolonged sitting with stair climbing exercise "snacks" on myokines',
+    abstract: "",
+  });
+  assert.equal(quoted.disposition, "auto_draft");
+  assert.equal(quoted.reason, "core phrase in title");
 });
 
 test("auto-drafts a title that contains VILPA", () => {
