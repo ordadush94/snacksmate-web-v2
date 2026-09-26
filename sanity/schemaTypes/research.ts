@@ -501,6 +501,57 @@ export const researchType = defineType({
         'Associates the Hebrew and English versions of the same research summary. Use the matching document slug or a shared key.',
     }),
     defineField({
+      name: 'translationSourceId',
+      title: 'Translation source id',
+      type: 'string',
+      group: 'editorial',
+      readOnly: true,
+      description:
+        'Published English document id this Hebrew draft was localized from. Internal only. This is not shown on the public research page.',
+    }),
+    defineField({
+      name: 'translatedAt',
+      title: 'Translated at',
+      type: 'datetime',
+      group: 'editorial',
+      readOnly: true,
+      description:
+        'When Hebrew localization created this draft. Internal only. This is not shown on the public research page.',
+    }),
+    defineField({
+      name: 'translationModel',
+      title: 'Translation model',
+      type: 'string',
+      group: 'editorial',
+      readOnly: true,
+      description:
+        'Model id that wrote this Hebrew draft. Internal only. This is not shown on the public research page.',
+    }),
+    defineField({
+      name: 'translationStatus',
+      title: 'Translation status',
+      type: 'string',
+      group: 'editorial',
+      options: {
+        list: [
+          {title: 'Needs review', value: 'needs_review'},
+          {title: 'Reviewed', value: 'reviewed'},
+        ],
+        layout: 'radio',
+      },
+      description:
+        'Internal review state for a Hebrew localization. New translations stay Needs review until a person checks them. This is not shown on the public research page and it never publishes the document.',
+    }),
+    defineField({
+      name: 'translationReviewNote',
+      title: 'Translation review note',
+      type: 'text',
+      rows: 4,
+      group: 'editorial',
+      description:
+        'Internal notes for the Hebrew reviewer. This is not shown on the public research page.',
+    }),
+    defineField({
       name: 'editorialStatus',
       title: 'Editorial status',
       type: 'string',

@@ -1,0 +1,96 @@
+name: Hebrew Translation
+
+# SAFETY: manual only. This workflow has no schedule.
+# Dry-run is the default and must not modify Sanity.
+# A real run creates Hebrew drafts only. It never publishes.
+# Do not add a schedule until Hebrew translations have been reviewed for quality.
+on:
+  workflow_dispatch:
+    inputs:
+      content_type:
+        description: Content type
+        type: choice
+        options:
+          - research
+          - article
+        default: research
+      document_id:
+        description: Sanity id of one published English document. Leave empty when missing is true.
+        type: string
+        required: false
+        default: ""
+      missing:
+        description: Localize published English documents that have no Hebrew counterpart. Leave document id empty.
+        type: boolean
+        default: false
+      dry_run:
+        description: Dry run only. Leave this checked. Uncheck only to create Hebrew Sanity drafts. This never publishes.
+        type: boolean
+        default: true
+      limit:
+        description: Maximum missing documents to localize. Default 5. The script refuses more than 25.
+        type: string
+        required: false
+        default: "5"
+
+permissions:
+  contents: read
+
+jobs:
+  translate:
+    name: Hebrew localization
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Localize into Hebrew drafts
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          RESEARCH_AI_MODEL: ${{ vars.RESEARCH_AI_MODEL }}
+          SANITY_WRITE_TOKEN: ${{ secrets.SANITY_WRITE_TOKEN }}
+          NEXT_PUBLIC_SANITY_PROJECT_ID: 8wc8eouj
+          NEXT_PUBLIC_SANITY_DATASET: production
+          NEXT_PUBLIC_SANITY_API_VERSION: "2026-09-22"
+          CONTENT_TYPE: ${{ github.event.inputs.content_type }}
+          DOCUMENT_ID: ${{ github.event.inputs.document_id }}
+          MISSING: ${{ github.event.inputs.missing }}
+          TRANSLATE_LIMIT: ${{ github.event.inputs.limit || '5' }}
+          # True only when a manual run explicitly turns dry-run off.
+          WRITE_DRAFTS: ${{ github.event.inputs.dry_run == false || github.event.inputs.dry_run == 'false' }}
+        run: |
+          echo "Hebrew translation is manual. It does not publish drafts."
+          if [ -n "$DOCUMENT_ID" ] && [ "$MISSING" = "true" ]; then
+            echo "Provide a document id or missing translations, not both."
+            exit 1
+          fi
+          if [ -z "$DOCUMENT_ID" ] && [ "$MISSING" != "true" ]; then
+            echo "Provide a document id or enable missing translations."
+            exit 1
+          fi
+          ARGS=(--type="$CONTENT_TYPE")
+          if [ -n "$DOCUMENT_ID" ]; then
+            ARGS+=(--id="$DOCUMENT_ID")
+          else
+            ARGS+=(--missing --limit="${TRANSLATE_LIMIT:-5}")
+          fi
+          if [ "$WRITE_DRAFTS" = "true" ]; then
+            echo "Mode: create unpublished Hebrew Sanity drafts. Nothing will be published."
+            if [ "$MISSING" = "true" ]; then
+              ARGS+=(--write)
+            fi
+            npm run translate:he -- "${ARGS[@]}"
+          else
+            echo "Mode: dry-run. No Sanity documents will be modified."
+            npm run translate:he -- --dry-run "${ARGS[@]}"
+          fi
