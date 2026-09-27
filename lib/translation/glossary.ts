@@ -93,7 +93,9 @@ export const HEBREW_SCIENTIFIC_GLOSSARY: readonly GlossaryEntry[] = [
   {
     id: "crossover-study",
     sources: ["crossover study"],
-    hebrew: ["מחקר מוצלב"],
+    hebrew: ["מחקר מוצלב", "ניסוי מוצלב"],
+    usage:
+      "מחקר מוצלב and ניסוי מוצלב are both acceptable. ניסוי מוצלב אקראי is valid professional Hebrew.",
   },
   {
     id: "cohort-study",

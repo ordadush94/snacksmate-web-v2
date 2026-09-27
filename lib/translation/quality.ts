@@ -22,6 +22,7 @@ const OBSERVATIONAL_DESIGNS = new Set([
 const INTERVENTION_DESIGNS = new Set([
   "crossover-study",
   "randomized-controlled-trial",
+  "controlled-trial",
 ]);
 
 const ASSOCIATIVE_ENGLISH =
@@ -119,7 +120,7 @@ export function associationWarnings(input: {
   }
   if (intervention && !associative && ASSOCIATION_HEBREW.test(input.hebrew)) {
     warnings.push(
-      "This randomized or crossover study describes an intervention contrast. Do not use נמצא קשר or נקשר ל־ for that contrast.",
+      "This randomized, crossover, or controlled intervention uses association wording. In the excerpt, main findings, practical interpretation, and SEO description, use a direct comparison such as לאחר שתי דקות נמצא חמצון שומנים גבוה יותר לעומת דקה אחת. Do not write נמצא קשר or נקשר ל־.",
     );
   }
   return warnings;
@@ -134,7 +135,7 @@ export function participantWordingWarnings(hebrew: string): string[] {
 
 export function awkwardPhrasingWarnings(hebrew: string): string[] {
   const warnings: string[] = [];
-  if (/אקוטי/.test(hebrew)) {
+  if (/פעילות אקוטית|מפגשים אקוטיים/.test(hebrew)) {
     warnings.push(
       "Acute-session wording sounds translated. Prefer plain Hebrew such as מפגשי פעילות חד־פעמיים, and state the days between sessions.",
     );
@@ -143,6 +144,13 @@ export function awkwardPhrasingWarnings(hebrew: string): string[] {
     warnings.push("Washout was rendered as שטיפה. State the number of days between sessions.");
   }
   return warnings;
+}
+
+export function acuteResponseWarnings(sourceText: string, hebrew: string): string[] {
+  if (!/\bacute\b/i.test(sourceText) || !/חריפ/.test(hebrew)) return [];
+  return [
+    "Acute was rendered with חריפ, which can sound like disease severity. For an immediate physiological or metabolic response, prefer מיידיות. Use אקוטיות only when the technical term is needed.",
+  ];
 }
 
 export function mainFindingDirectionWarnings(sourceText: string, hebrew: string): string[] {
@@ -218,6 +226,7 @@ export function numberWarnings(sourceText: string, hebrew: string, field: string
       isSmallIntegerWordEligible(sourceText, item.index, item.raw),
     );
     if (wordEligible && wordValues.has(hit.raw)) continue;
+    if (quantityImpliedByUnit(sourceText, hebrew, hit.raw, occurrences)) continue;
     missing.push(hit.raw);
   }
   if (missing.length === 0) return [];
@@ -326,6 +335,7 @@ export function translationQualityWarnings(input: {
     }),
     ...participantWordingWarnings(hebrew),
     ...awkwardPhrasingWarnings(hebrew),
+    ...acuteResponseWarnings(sourceText, hebrew),
     ...mainFindingDirectionWarnings(
       input.source._type === "research" ? plainText(input.source.mainFindings) : "",
       translatableSpans(input.source)
@@ -476,6 +486,8 @@ function isSmallIntegerWordEligible(text: string, index: number, raw: string): b
     return false;
   }
   if (/\b(?:doses?|dosages?)\s*(?:of\s*)?$/i.test(before)) return false;
+  if (/\b(?:heart\s+rates?|pulse|bpm|beats?)\b/i.test(before.slice(-40))) return false;
+  if (/^(?:\s*|-\s*)(?:bpm|beats?)\b/i.test(after)) return false;
   if (
     /(?:\b(?:Cohen(?:'s)?\s+)?d\s*=\s*|\b(?:OR|HR|RR|SMD|AOR|β|beta)\s*=\s*|\beffect\s+sizes?\s*(?:of\s*)?|\bodds\s+ratios?\s*(?:of\s*)?|\bhazard\s+ratios?\s*(?:of\s*)?)$/i.test(
       before,
@@ -483,8 +495,100 @@ function isSmallIntegerWordEligible(text: string, index: number, raw: string): b
   ) {
     return false;
   }
+  const unit = timeUnitAt(text, index, raw);
+  if (unit === "minute" || unit === "hour" || unit === "week") return true;
   if (MEASUREMENT_UNIT.test(after)) return false;
+  if (/^(?:-\s*)?(?:,|\band\b|\bor\b)/i.test(after) && listedStrictUnit(after)) return false;
   return true;
+}
+
+const IMPLIED_TIME_QUANTITY: Record<string, Record<string, readonly string[]>> = {
+  "1": {
+    minute: ["דקה"],
+    hour: ["שעה"],
+    day: ["יום"],
+    week: ["שבוע"],
+    second: ["שנייה", "שניה"],
+  },
+  "2": {
+    hour: ["שעתיים"],
+    day: ["יומיים"],
+    week: ["שבועיים"],
+  },
+};
+
+function quantityImpliedByUnit(
+  sourceText: string,
+  hebrew: string,
+  raw: string,
+  occurrences: ReadonlyArray<{ index: number; raw: string }>,
+): boolean {
+  const formsByUnit = IMPLIED_TIME_QUANTITY[raw];
+  if (!formsByUnit || occurrences.length === 0) return false;
+  return occurrences.every((item) => {
+    if (!isSmallIntegerWordEligible(sourceText, item.index, item.raw) && !isNarrativeTimeUnit(sourceText, item.index, item.raw)) {
+      return false;
+    }
+    const unit = timeUnitAt(sourceText, item.index, item.raw);
+    const forms = unit ? formsByUnit[unit] : undefined;
+    if (!forms) return false;
+    return forms.some((form) => hasHebrewWord(hebrew, form));
+  });
+}
+
+function isNarrativeTimeUnit(text: string, index: number, raw: string): boolean {
+  if (isStrictQuantityContext(text, index, raw)) return false;
+  return timeUnitAt(text, index, raw) !== null;
+}
+
+function isStrictQuantityContext(text: string, index: number, raw: string): boolean {
+  const before = text.slice(Math.max(0, index - 48), index);
+  const after = text.slice(index + raw.length, index + raw.length + 48);
+  if (/^\s*%/.test(after) || /^\s*percent(?:age)?\b/i.test(after)) return true;
+  if (/(?:\bp[\s-]*values?\b[^0-9]{0,12}|\bp\s*(?:=|<|≤|>)\s*)$/i.test(before)) return true;
+  if (/\b(?:CIs?|confidence\s+intervals?)\b/i.test(before)) return true;
+  if (/\byears?\b/i.test(before.slice(-16)) || /^\s*-?\s*years?\b/i.test(after)) return true;
+  if (/(?:\b[nN]\s*=\s*|\bsample\s+size\s*(?:of\s*)?|\bsample\s+of\s*)$/i.test(before)) return true;
+  if (/\b(?:doses?|dosages?)\s*(?:of\s*)?$/i.test(before)) return true;
+  if (/\b(?:heart\s+rates?|pulse|bpm|beats?)\b/i.test(before.slice(-40))) return true;
+  if (/^(?:\s*|-\s*)(?:bpm|beats?|watts?|W)\b/i.test(after)) return true;
+  if (
+    /(?:\b(?:Cohen(?:'s)?\s+)?d\s*=\s*|\b(?:OR|HR|RR|SMD|AOR|β|beta)\s*=\s*|\beffect\s+sizes?\s*(?:of\s*)?|\bodds\s+ratios?\s*(?:of\s*)?|\bhazard\s+ratios?\s*(?:of\s*)?)$/i.test(
+      before,
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function listedStrictUnit(after: string): boolean {
+  return /\b(?:mg|mcg|µg|μg|watts?|bpm|beats?)\b/i.test(after);
+}
+
+function timeUnitAt(text: string, index: number, raw: string): "minute" | "hour" | "day" | "week" | "second" | null {
+  const after = text.slice(index + raw.length, index + raw.length + 56);
+  const direct = directTimeUnit(after);
+  if (direct) return direct;
+  if (!/^(?:-\s*)?(?:,|\band\b|\bor\b)/i.test(after)) return null;
+  const listed = after.match(/\b(?:minutes?|min|hours?|hrs?|seconds?|secs?|sec|days?|weeks?)\b/i);
+  return listed ? directTimeUnit(listed[0]) : null;
+}
+
+function directTimeUnit(after: string): "minute" | "hour" | "day" | "week" | "second" | null {
+  if (/^\s*(?:-\s*)?(?:minutes?|min)\b/i.test(after)) return "minute";
+  if (/^\s*(?:-\s*)?(?:hours?|hrs?)\b/i.test(after)) return "hour";
+  if (/^\s*(?:-\s*)?(?:seconds?|secs?|sec)\b/i.test(after)) return "second";
+  if (/^\s*(?:-\s*)?(?:days?)\b/i.test(after)) return "day";
+  if (/^\s*(?:-\s*)?(?:weeks?)\b/i.test(after)) return "week";
+  return null;
+}
+
+function hasHebrewWord(text: string, word: string): boolean {
+  const pattern = new RegExp(
+    `(?<![\\u05D0-\\u05EA])(?:[והבלכמש][־-]?)?${word}(?![\\u05D0-\\u05EA])`,
+  );
+  return pattern.test(text);
 }
 
 function unique(values: string[]): string[] {
