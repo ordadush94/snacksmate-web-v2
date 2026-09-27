@@ -6,7 +6,7 @@ import { OpenAiRequestError } from "../lib/research-enrichment/openai";
 import { createSanityWriteClient } from "../lib/research-discovery/sanity";
 import { parseTranslationArgs } from "../lib/translation/args";
 import { matchingHebrewLink } from "../lib/translation/document";
-import { requestHebrewLocalization } from "../lib/translation/openai";
+import { requestHebrewFieldRepair, requestHebrewLocalization } from "../lib/translation/openai";
 import { runHebrewTranslation } from "../lib/translation/run";
 import {
   createHebrewDraft,
@@ -106,6 +106,12 @@ async function main() {
         apiKey: config.openAiKey,
         model,
         source,
+      }),
+    repair: (request) =>
+      requestHebrewFieldRepair({
+        apiKey: config.openAiKey,
+        model,
+        request,
       }),
     writeDraft: (draft) => createHebrewDraft(sanity, draft),
   });

@@ -1,7 +1,9 @@
 import { extractResponseText, OpenAiRequestError } from "../research-enrichment/openai";
 import { buildTranslationInput, buildTranslationInstructions } from "./prompt";
+import type { FieldRepairRequest } from "./refine";
 import {
   ARTICLE_TRANSLATION_JSON_SCHEMA,
+  parseFieldRepair,
   parseTranslation,
   RESEARCH_TRANSLATION_JSON_SCHEMA,
 } from "./schema";
@@ -16,6 +18,8 @@ export function buildTranslationRequest(input: {
   contentType: EnglishDocument["_type"];
   instructions: string;
   input: string;
+  schema?: Record<string, unknown>;
+  schemaName?: string;
 }): Record<string, unknown> {
   const body: Record<string, unknown> = {
     model: input.model,
@@ -27,14 +31,16 @@ export function buildTranslationRequest(input: {
       format: {
         type: "json_schema",
         name:
-          input.contentType === "article"
+          input.schemaName ??
+          (input.contentType === "article"
             ? "hebrew_article_localization"
-            : "hebrew_research_localization",
+            : "hebrew_research_localization"),
         strict: true,
         schema:
-          input.contentType === "article"
+          input.schema ??
+          (input.contentType === "article"
             ? ARTICLE_TRANSLATION_JSON_SCHEMA
-            : RESEARCH_TRANSLATION_JSON_SCHEMA,
+            : RESEARCH_TRANSLATION_JSON_SCHEMA),
       },
     },
   };
@@ -54,17 +60,57 @@ export async function requestHebrewLocalization(options: {
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
 }): Promise<HebrewTranslation> {
-  const fetchImpl = options.fetchImpl ?? fetch;
-  const sleep = options.sleep ?? defaultSleep;
-  const now = options.now ?? Date.now;
-  const body = JSON.stringify(
-    buildTranslationRequest({
+  const payload = await completeStructuredResponse({
+    apiKey: options.apiKey,
+    body: buildTranslationRequest({
       model: options.model,
       contentType: options.source._type,
       instructions: buildTranslationInstructions(options.source._type),
       input: buildTranslationInput(options.source),
     }),
-  );
+    fetchImpl: options.fetchImpl,
+    sleep: options.sleep,
+    now: options.now,
+  });
+  return parseTranslation(options.source, payload);
+}
+
+export async function requestHebrewFieldRepair(options: {
+  apiKey: string;
+  model: string;
+  request: FieldRepairRequest;
+  fetchImpl?: typeof fetch;
+  sleep?: (ms: number) => Promise<void>;
+  now?: () => number;
+}): Promise<Partial<HebrewTranslation>> {
+  const payload = await completeStructuredResponse({
+    apiKey: options.apiKey,
+    body: buildTranslationRequest({
+      model: options.model,
+      contentType: options.request.source._type,
+      instructions: options.request.instructions,
+      input: options.request.input,
+      schema: options.request.schema,
+      schemaName: options.request.schemaName,
+    }),
+    fetchImpl: options.fetchImpl,
+    sleep: options.sleep,
+    now: options.now,
+  });
+  return parseFieldRepair(options.request.source, options.request.fields, payload);
+}
+
+async function completeStructuredResponse(options: {
+  apiKey: string;
+  body: Record<string, unknown>;
+  fetchImpl?: typeof fetch;
+  sleep?: (ms: number) => Promise<void>;
+  now?: () => number;
+}): Promise<unknown> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const sleep = options.sleep ?? defaultSleep;
+  const now = options.now ?? Date.now;
+  const body = JSON.stringify(options.body);
 
   let lastError: OpenAiRequestError | null = null;
 
@@ -112,7 +158,7 @@ export async function requestHebrewLocalization(options: {
     }
 
     try {
-      return parseTranslation(options.source, JSON.parse(extractResponseText(payload)) as unknown);
+      return JSON.parse(extractResponseText(payload)) as unknown;
     } catch (error) {
       if (error instanceof OpenAiRequestError && error.retryable && attempt < MAX_ATTEMPTS) {
         lastError = error;
