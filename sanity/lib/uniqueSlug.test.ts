@@ -97,31 +97,40 @@ function studioContext(dataset: readonly StudioDocument[], calls: FetchCall[] = 
   };
 }
 
+function proposedSlug(slug: string | StudioDocument["slug"] | undefined): string {
+  if (typeof slug === "string") return slug;
+  return slug?.current ?? "";
+}
+
 async function slugIsUnique(
   dataset: readonly StudioDocument[],
-  current: Pick<StudioDocument, "_id" | "_type" | "language"> & { slug?: string },
-  slug = current.slug ?? "",
+  current: Pick<StudioDocument, "_id" | "_type" | "language"> & {
+    slug?: string | StudioDocument["slug"];
+  },
+  slug?: string,
 ) {
   const { context } = studioContext(dataset);
-  return isUniqueSlugForLanguage(slug, {
+  return isUniqueSlugForLanguage(slug ?? proposedSlug(current.slug), {
     ...context,
     document: {
       _id: current._id,
       _type: current._type,
       language: current.language,
     },
-  } as SlugValidationContext);
+  } as unknown as SlugValidationContext);
 }
 
-function slugField(type: { fields: readonly { name: string; options?: { isUnique?: unknown } }[] }) {
+function slugField(type: { fields: ReadonlyArray<{ name: string; options?: unknown }> }) {
   const field = type.fields.find((item) => item.name === "slug");
   assert.ok(field, "slug field");
-  return field;
+  const options = field.options;
+  assert.ok(options && typeof options === "object");
+  return options as { isUnique?: unknown };
 }
 
 test("Article and Research share one locale-aware slug check", () => {
-  assert.equal(slugField(articleType).options?.isUnique, isUniqueSlugForLanguage);
-  assert.equal(slugField(researchType).options?.isUnique, isUniqueSlugForLanguage);
+  assert.equal(slugField(articleType).isUnique, isUniqueSlugForLanguage);
+  assert.equal(slugField(researchType).isUnique, isUniqueSlugForLanguage);
   assert.match(localeSlugUniquenessQuery, /_type == \$type/);
   assert.match(localeSlugUniquenessQuery, /language == \$language/);
   assert.match(localeSlugUniquenessQuery, /slug\.current == \$slug/);
@@ -258,7 +267,7 @@ test("the uniqueness query reads language, type, and the published document id",
   const unique = await isUniqueSlugForLanguage(ENGLISH_RESEARCH_SLUG, {
     ...context,
     document: hebrewResearchDraft,
-  } as SlugValidationContext);
+  } as unknown as SlugValidationContext);
 
   assert.equal(unique, true);
   assert.equal(calls.length, 1);
@@ -284,14 +293,14 @@ test("a document without a language or id is not rejected before those fields ex
     await isUniqueSlugForLanguage(EXAMPLE_SLUG, {
       ...context,
       document: { _id: "drafts.new", _type: "research", language: "  " },
-    } as SlugValidationContext),
+    } as unknown as SlugValidationContext),
     true,
   );
   assert.equal(
     await isUniqueSlugForLanguage(EXAMPLE_SLUG, {
       ...context,
       document: { _type: "article", language: "he" },
-    } as SlugValidationContext),
+    } as unknown as SlugValidationContext),
     true,
   );
   assert.equal(calls.length, 0);

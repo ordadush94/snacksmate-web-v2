@@ -1,4 +1,4 @@
-import type { SlugIsUniqueValidator } from "@sanity/types";
+import type { SanityDocument, SlugIsUniqueValidator } from "@sanity/types";
 import { getPublishedId } from "sanity";
 
 /** Matches the Studio client API version used by Sanity's own slug check. */
@@ -17,7 +17,7 @@ export const localeSlugUniquenessQuery = `!defined(*[
   !sanity::versionOf($publishedId)
 ][0]._id)`;
 
-function documentLanguage(document: { language?: unknown } | undefined): string | undefined {
+function documentLanguage(document: SanityDocument | undefined): string | undefined {
   const language = document?.language;
   if (typeof language !== "string") return undefined;
   const trimmed = language.trim();
