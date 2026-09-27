@@ -74,12 +74,12 @@ export function linkingReviewNotes(source: Pick<EnglishLink, "translationSlug">)
   ];
 }
 
-export function buildHebrewDraft(input: {
+export function assembleHebrewDraft(input: {
   source: EnglishDocument;
   translation: HebrewTranslation;
   model: string;
   translatedAt: string;
-}): HebrewDraft {
+}): { draft: HebrewDraft; qualityWarnings: string[] } {
   if (input.translation.kind !== input.source._type) {
     throw new Error(`Refusing to apply a ${input.translation.kind} translation to ${input.source._type}.`);
   }
@@ -97,21 +97,43 @@ export function buildHebrewDraft(input: {
     throw new Error("Refusing to set canonicalUrl. The site derives canonical URLs.");
   }
 
-  const warnings = translationQualityWarnings({
-    source: input.source,
+  return {
     draft,
-    translations,
-  });
+    qualityWarnings: translationQualityWarnings({
+      source: input.source,
+      draft,
+      translations,
+    }),
+  };
+}
+
+export function buildHebrewDraft(input: {
+  source: EnglishDocument;
+  translation: HebrewTranslation;
+  model: string;
+  translatedAt: string;
+}): HebrewDraft {
+  const { draft, qualityWarnings } = assembleHebrewDraft(input);
   const notes = unique([
     ...input.translation.reviewNotes,
-    ...warnings,
+    ...qualityWarnings,
     ...linkingReviewNotes(input.source),
   ]);
   if (notes.length > 0) draft.translationReviewNote = notes.join("\n");
   return draft;
 }
 
-export function formatTranslationReport(source: EnglishDocument, draft: HebrewDraft): string {
+export function formatTranslationReport(
+  source: EnglishDocument,
+  draft: HebrewDraft,
+  refinement?: {
+    triggered: boolean;
+    warningsBefore: readonly string[];
+    repairedFields: readonly string[];
+    warningsAfter: readonly string[];
+    resolvedWarnings: readonly string[];
+  },
+): string {
   const lines = [
     "Hebrew localization",
     `Type: ${draft._type}`,
@@ -151,6 +173,20 @@ export function formatTranslationReport(source: EnglishDocument, draft: HebrewDr
       `seoTitle (${[...draft.seoTitle].length} characters): ${draft.seoTitle}`,
       `seoDescription (${[...draft.seoDescription].length} characters): ${draft.seoDescription}`,
       `body: ${plain(draft.body)}`,
+    );
+  }
+
+  if (refinement) {
+    lines.push(
+      "",
+      `Refinement triggered: ${refinement.triggered ? "yes" : "no"}`,
+      "Warnings before refinement:",
+      ...noteLines(refinement.warningsBefore),
+      `Fields repaired: ${refinement.repairedFields.join(", ") || "none"}`,
+      "Warnings resolved:",
+      ...noteLines(refinement.resolvedWarnings),
+      "Warnings after refinement:",
+      ...noteLines(refinement.warningsAfter),
     );
   }
 
@@ -345,6 +381,11 @@ function plain(value: unknown): string {
       );
     })
     .join("");
+}
+
+function noteLines(notes: readonly string[]): string[] {
+  if (notes.length === 0) return ["- none"];
+  return notes.map((note) => `- ${note}`);
 }
 
 function unique(values: string[]): string[] {

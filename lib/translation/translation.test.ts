@@ -28,7 +28,7 @@ import {
   missingGlossaryTerms,
 } from "./glossary";
 import { buildTranslationRequest, requestHebrewLocalization } from "./openai";
-import { buildTranslationInstructions } from "./prompt";
+import { buildRefinementInstructions, buildTranslationInstructions } from "./prompt";
 import {
   associationWarnings,
   awkwardPhrasingWarnings,
@@ -45,7 +45,9 @@ import {
   suspiciousLiteralWarnings,
   textLength,
 } from "./quality";
+import { MAX_REFINEMENT_ATTEMPTS } from "./refine";
 import { runHebrewTranslation } from "./run";
+import type { FieldRepairRequest } from "./refine";
 import { createHebrewDraft, HEBREW_LINKS_QUERY, PUBLISHED_ENGLISH_BY_ID_QUERY } from "./sanity";
 import { parseTranslation, TranslationValidationError } from "./schema";
 import { portableTextSpans, translatableSpans } from "./segments";
@@ -694,6 +696,113 @@ test("an English research page finds Hebrew by translationSlug when its own tran
   );
 });
 
+test("refinement restores a missing comparison target in one pass", async () => {
+  const broken = withFindings(
+    "כל הפרוטוקולים עוררו תגובה מטבולית. במהלך המאמץ, שתי דקות העלו את סך חמצון השומנים, והתוצאות לא נבדלו באופן מובהק. הוצאה אנרגטית נשארה מעל רמת המנוחה. במהלך ההתאוששות נצפתה עלייה בחמצון השומנים לצד ירידה בחמצון הגלוקוז.",
+  );
+  const fixed = researchTranslation().mainFindings;
+  let writes = 0;
+  const { calls, request, summary } = await localizeOnce(broken, { mainFindings: fixed }, () => {
+    writes += 1;
+  });
+  assert.equal(calls, 1);
+  assert.equal(writes, 0);
+  assert.deepEqual(request?.fields, ["mainFindings"]);
+  assert.match(summary.reports[0] ?? "", /Refinement triggered: yes/);
+  assert.match(summary.reports[0] ?? "", /comparison target/);
+  assert.match(summary.reports[0] ?? "", /Warnings resolved:/);
+  assert.doesNotMatch(reviewNotes(summary.reports[0] ?? ""), /comparison target/);
+  assert.match(summary.reports[0] ?? "", /לעומת דקה אחת/);
+});
+
+test("refinement restores a directional finding that was collapsed", async () => {
+  const broken = withFindings(
+    "במהלך המאמץ חמצון השומנים השתנה. ההוצאה האנרגטית נשארה מעל רמת המנוחה.",
+  );
+  const { calls, summary } = await localizeOnce(broken, {
+    mainFindings: researchTranslation().mainFindings,
+  });
+  assert.equal(calls, 1);
+  assert.match(summary.reports[0] ?? "", /collapsed into/);
+  assert.match(summary.reports[0] ?? "", /Warnings resolved:/);
+  assert.doesNotMatch(reviewNotes(summary.reports[0] ?? ""), /collapsed into|השתנה/);
+  assert.match(summary.reports[0] ?? "", /עלייה בחמצון השומנים/);
+});
+
+test("refinement does not change bibliographic fields", async () => {
+  const source = researchFixture();
+  const broken = withFindings("במהלך המאמץ חמצון השומנים השתנה. ההוצאה האנרגטית נשארה מעל רמת המנוחה.");
+  const { request, summary } = await localizeOnce(broken, {
+    mainFindings: researchTranslation().mainFindings,
+  });
+  const schema = request?.schema as {
+    additionalProperties: boolean;
+    required: string[];
+    properties: Record<string, unknown>;
+  };
+  assert.equal(schema.additionalProperties, false);
+  assert.deepEqual(schema.required, ["mainFindings"]);
+  assert.deepEqual(Object.keys(schema.properties), ["mainFindings"]);
+  const report = summary.reports[0] ?? "";
+  assert.match(report, new RegExp(`Preserved English title: ${escapeRegExp(source.title)}`));
+  assert.match(report, /Preserved journal: Frontiers in physiology/);
+  assert.match(report, /Preserved DOI: 10\.3389\/fphys\.2026\.1929244/);
+  assert.match(report, /Sample size: 20/);
+  assert.match(report, /population: עשרים סטודנטים גברים בעלי אורח חיים יושבני/);
+  assert.doesNotMatch(request?.instructions ?? "", /42798426|two-minute exercise snack/i);
+  assert.doesNotMatch(request?.input ?? "", /10\.3389\/fphys\.2026\.1929244/);
+  assert.doesNotMatch(buildRefinementInstructions(), /42798426|two-minute exercise snack|חמצון השומנים/);
+});
+
+test("refinement runs at most once", async () => {
+  assert.equal(MAX_REFINEMENT_ATTEMPTS, 1);
+  const broken = withFindings("במהלך המאמץ חמצון השומנים השתנה. ההוצאה האנרגטית נשארה מעל רמת המנוחה.");
+  const { calls } = await localizeOnce(broken, { mainFindings: broken.mainFindings });
+  assert.equal(calls, 1);
+});
+
+test("a warning that survives refinement stays in the review note", async () => {
+  const broken = withFindings("במהלך המאמץ חמצון השומנים השתנה. ההוצאה האנרגטית נשארה מעל רמת המנוחה.");
+  const { summary } = await localizeOnce(broken, { mainFindings: broken.mainFindings });
+  const report = summary.reports[0] ?? "";
+  assert.match(report, /Warnings after refinement:/);
+  assert.match(reviewNotes(report), /collapsed into/);
+  assert.match(report, /translationStatus: needs_review/);
+});
+
+test("a missing translationSlug note does not trigger refinement", async () => {
+  const source = researchFixture();
+  assert.equal(source.translationSlug, null);
+  const { calls, summary } = await localizeOnce(researchTranslation(), { mainFindings: [] });
+  assert.equal(calls, 0);
+  const report = summary.reports[0] ?? "";
+  assert.match(report, /Refinement triggered: no/);
+  assert.match(reviewNotes(report), /language switch/);
+  assert.match(report, /Fields repaired: none/);
+});
+
+test("refinement does not publish", async () => {
+  let writes = 0;
+  const broken = withFindings(
+    "כל הפרוטוקולים עוררו תגובה מטבולית. במהלך המאמץ, שתי דקות העלו את סך חמצון השומנים, והתוצאות לא נבדלו באופן מובהק. הוצאה אנרגטית נשארה מעל רמת המנוחה. במהלך ההתאוששות נצפתה עלייה בחמצון השומנים לצד ירידה בחמצון הגלוקוז.",
+  );
+  const { summary } = await localizeOnce(
+    broken,
+    { mainFindings: researchTranslation().mainFindings },
+    () => {
+      writes += 1;
+    },
+  );
+  assert.equal(writes, 0);
+  assert.equal(summary.created, 0);
+  assert.equal(summary.dryRun, 1);
+  const report = summary.reports[0] ?? "";
+  assert.match(report, /Published: no/);
+  assert.match(report, /translationStatus: needs_review/);
+  assert.match(report, /drafts\.research-he-/);
+  assert.match(report, /Dry run: Sanity was not modified|Nothing was published|Published: no/);
+});
+
 test("bulk translation defaults to dry-run and a single id can target one document", () => {
   const bulk = parseTranslationArgs(["--missing", "--type=research"]);
   assert.equal(bulk.dryRun, true);
@@ -828,6 +937,49 @@ function researchFixture(): EnglishResearch {
     ),
     editorialStatus: "published",
   };
+}
+
+function withFindings(text: string): ResearchTranslation {
+  const translation = researchTranslation();
+  translation.mainFindings = [{ id: "mainFindings.0.children.0", text }];
+  return translation;
+}
+
+async function localizeOnce(
+  translation: ResearchTranslation,
+  repaired: unknown,
+  onWrite?: () => void,
+) {
+  let calls = 0;
+  let request: FieldRepairRequest | undefined;
+  const summary = await runHebrewTranslation({
+    dryRun: true,
+    model: MODEL,
+    sources: [researchFixture()],
+    existing: [],
+    translate: async () => translation,
+    repair: async (next) => {
+      calls += 1;
+      request = next;
+      return repaired;
+    },
+    writeDraft: async () => {
+      onWrite?.();
+    },
+    now: () => TRANSLATED_AT,
+    log: () => undefined,
+  });
+  return { calls, request, summary };
+}
+
+function reviewNotes(report: string): string {
+  const marker = "Translation review notes:";
+  const start = report.indexOf(marker);
+  return start === -1 ? "" : report.slice(start);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function researchTranslation(): ResearchTranslation {
