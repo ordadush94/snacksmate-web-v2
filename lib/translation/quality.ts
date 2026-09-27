@@ -178,14 +178,70 @@ export function mainFindingDirectionWarnings(sourceText: string, hebrew: string)
   if (
     /fat oxidation/i.test(sourceText) &&
     /glucose oxidation/i.test(sourceText) &&
-    /shift/i.test(sourceText) &&
-    (!hebrew.includes("חמצון שומנים") || !hebrew.includes("גלוקוז"))
+    /shift/i.test(sourceText)
   ) {
-    warnings.push(
-      "Main findings dropped the recovery shift in fat oxidation and glucose oxidation.",
-    );
+    if (!/חמצון ה?שומנים/.test(hebrew) || !hebrew.includes("גלוקוז")) {
+      warnings.push(
+        "Main findings dropped the recovery shift in fat oxidation and glucose oxidation.",
+      );
+    }
+    const fatUp =
+      /(?:עלה|עלייה|גבוה יותר|יותר)[^.\n]{0,60}חמצון ה?שומנים|חמצון ה?שומנים[^.\n]{0,60}(?:עלה|עלייה|גבוה|יותר)/.test(
+        hebrew,
+      );
+    const glucoseDown =
+      /(?:ירד|ירידה|פחות|נמוך)[^.\n]{0,60}גלוקוז|גלוקוז[^.\n]{0,60}(?:ירד|ירידה|פחות|נמוך)/.test(
+        hebrew,
+      );
+    if (!fatUp || !glucoseDown) {
+      warnings.push(
+        "Main findings dropped the recovery direction. Keep greater fat oxidation and lower glucose oxidation. Do not reduce this to השתנו.",
+      );
+    }
   }
   return warnings;
+}
+
+const BETWEEN_PERSON = /בין[־\-‑\s]?אישי|השוואה בין[־\-‑\s]?(?:ה)?(?:נבדקים|משתתפים|אנשים)/;
+
+export function betweenPersonWarnings(input: {
+  sourceText: string;
+  hebrew: string;
+  studyDesign?: string | null;
+}): string[] {
+  const crossover = input.studyDesign?.trim() === "crossover-study";
+  const within = /\bwithin[-\s](?:participant|subject|person)s?\b/i.test(input.sourceText);
+  if (!crossover && !within) return [];
+  if (!BETWEEN_PERSON.test(input.hebrew)) return [];
+  return [
+    "A within-participant crossover comparison was translated as a between-person comparison. Use השוואה בתוך אותם משתתפים. Do not write בין־אישית.",
+  ];
+}
+
+export function untestedLongTermWarnings(sourceText: string, hebrew: string): string[] {
+  const acuteUntested =
+    /\bacute\b/i.test(sourceText) &&
+    /\bdid not establish\b/i.test(sourceText) &&
+    /\blong(?:er)?-term\b/i.test(sourceText);
+  if (!acuteUntested) return [];
+  if (!/לא הראה באופן ברור/.test(hebrew) || !/לטווח ארוך/.test(hebrew)) return [];
+  return [
+    "Long-term benefit was not tested. Write המחקר לא בחן יתרונות בריאותיים לטווח ארוך. Do not write לא הראה באופן ברור for an outcome the study did not measure.",
+  ];
+}
+
+export function seoComparisonWarnings(sourceText: string, seoDescription: string): string[] {
+  const comparison =
+    /\b(?:greater|higher|increased|more)\b/i.test(sourceText) &&
+    /\b(?:compared with|than|versus)\b/i.test(sourceText);
+  if (!comparison || !seoDescription.trim()) return [];
+  const claimsHigher = /גבוה יותר|יותר חמצון/.test(seoDescription);
+  if (claimsHigher && !/לעומת|מאשר/.test(seoDescription)) {
+    return [
+      "SEO description states a higher result without saying higher than what. Include the comparison, for example שתי דקות הובילו לחמצון שומנים גבוה יותר לעומת דקה אחת.",
+    ];
+  }
+  return [];
 }
 
 export function uncertaintyWarnings(sourceText: string, hebrew: string): string[] {
@@ -336,6 +392,13 @@ export function translationQualityWarnings(input: {
     ...participantWordingWarnings(hebrew),
     ...awkwardPhrasingWarnings(hebrew),
     ...acuteResponseWarnings(sourceText, hebrew),
+    ...betweenPersonWarnings({
+      sourceText,
+      hebrew,
+      studyDesign: input.source._type === "research" ? input.source.studyDesign : null,
+    }),
+    ...untestedLongTermWarnings(sourceText, hebrew),
+    ...seoComparisonWarnings(sourceText, input.draft.seoDescription),
     ...mainFindingDirectionWarnings(
       input.source._type === "research" ? plainText(input.source.mainFindings) : "",
       translatableSpans(input.source)
