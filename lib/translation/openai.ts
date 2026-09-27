@@ -3,7 +3,6 @@ import { buildTranslationInput, buildTranslationInstructions } from "./prompt";
 import type { FieldRepairRequest } from "./refine";
 import {
   ARTICLE_TRANSLATION_JSON_SCHEMA,
-  parseFieldRepair,
   parseTranslation,
   RESEARCH_TRANSLATION_JSON_SCHEMA,
 } from "./schema";
@@ -82,8 +81,8 @@ export async function requestHebrewFieldRepair(options: {
   fetchImpl?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
-}): Promise<Partial<HebrewTranslation>> {
-  const payload = await completeStructuredResponse({
+}): Promise<unknown> {
+  return completeStructuredResponse({
     apiKey: options.apiKey,
     body: buildTranslationRequest({
       model: options.model,
@@ -97,7 +96,6 @@ export async function requestHebrewFieldRepair(options: {
     sleep: options.sleep,
     now: options.now,
   });
-  return parseFieldRepair(options.request.source, options.request.fields, payload);
 }
 
 async function completeStructuredResponse(options: {

@@ -49,6 +49,8 @@ export async function runHebrewTranslation(input: {
         triggered: false,
         warningsBefore: [],
         repairedFields: [],
+        modelCallCompleted: false,
+        fieldsReturned: [],
         warningsAfter: [],
         resolvedWarnings: [],
       };

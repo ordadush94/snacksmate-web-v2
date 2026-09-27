@@ -11,8 +11,11 @@ export type RefinementReport = {
   triggered: boolean;
   warningsBefore: string[];
   repairedFields: string[];
+  modelCallCompleted: boolean;
+  fieldsReturned: string[];
   warningsAfter: string[];
   resolvedWarnings: string[];
+  mergeError?: string;
 };
 
 export type FieldRepairRequest = {
@@ -66,30 +69,74 @@ export async function refineTranslationOnce(input: {
   if (fixable.length === 0 || fields.length === 0) {
     return {
       translation: input.translation,
-      report: {
-        triggered: false,
-        warningsBefore: before,
-        repairedFields: [],
-        warningsAfter: before,
-        resolvedWarnings: [],
-      },
+      report: emptyReport(before),
     };
   }
 
   const request = fieldRepairRequest(input.source, input.translation, fields, fixable);
-  const payload = await input.repair(request);
-  const repaired = parseFieldRepair(input.source, fields, payload);
-  const translation = applyFieldRepair(input.translation, repaired);
-  const after = qualityWarnings({ ...input, translation });
+  let payload: unknown;
+  try {
+    payload = await input.repair(request);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Refinement model call failed.";
+    return {
+      translation: input.translation,
+      report: {
+        ...emptyReport(before),
+        triggered: true,
+        repairedFields: fields,
+        modelCallCompleted: false,
+        mergeError: message,
+      },
+    };
+  }
+
+  const fieldsReturned = payload && typeof payload === "object" && !Array.isArray(payload)
+    ? Object.keys(payload as Record<string, unknown>)
+    : [];
+  try {
+    const repaired = parseFieldRepair(input.source, fields, payload);
+    const translation = applyFieldRepair(input.translation, repaired);
+    const after = qualityWarnings({ ...input, translation });
+    return {
+      translation,
+      report: {
+        triggered: true,
+        warningsBefore: before,
+        repairedFields: fields,
+        modelCallCompleted: true,
+        fieldsReturned,
+        warningsAfter: after,
+        resolvedWarnings: fixable.filter((warning) => !after.includes(warning)),
+      },
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Refinement response could not be merged.";
+    return {
+      translation: input.translation,
+      report: {
+        triggered: true,
+        warningsBefore: before,
+        repairedFields: fields,
+        modelCallCompleted: true,
+        fieldsReturned,
+        warningsAfter: before,
+        resolvedWarnings: [],
+        mergeError: message,
+      },
+    };
+  }
+}
+
+function emptyReport(warningsBefore: string[]): RefinementReport {
   return {
-    translation,
-    report: {
-      triggered: true,
-      warningsBefore: before,
-      repairedFields: fields,
-      warningsAfter: after,
-      resolvedWarnings: fixable.filter((warning) => !after.includes(warning)),
-    },
+    triggered: false,
+    warningsBefore,
+    repairedFields: [],
+    modelCallCompleted: false,
+    fieldsReturned: [],
+    warningsAfter: warningsBefore,
+    resolvedWarnings: [],
   };
 }
 

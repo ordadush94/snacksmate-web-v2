@@ -411,6 +411,13 @@ test("intervention contrasts are not forced into association wording", () => {
     ).some((warning) => warning.includes("השתנה")),
     true,
   );
+  assert.equal(
+    collapsedDirectionWarnings(
+      sourceFindings,
+      "במהלך המאמץ שתי דקות העלו את חמצון השומנים לעומת דקה אחת ובמהלך ההתאוששות חמצון השומנים והגלוקוז השתנו.",
+    ).some((warning) => warning.includes("collapsed into")),
+    true,
+  );
   assert.deepEqual(
     collapsedDirectionWarnings(
       "Fat oxidation increased whereas glucose oxidation decreased during recovery.",
@@ -466,6 +473,13 @@ test("intervention contrasts are not forced into association wording", () => {
     seoComparisonWarnings(
       "2 minutes increased fat oxidation compared with 1 minute.",
       "שתי דקות הובילו לחמצון שומנים גבוה יותר.",
+    ).length,
+    1,
+  );
+  assert.equal(
+    seoComparisonWarnings(
+      "2 minutes increased fat oxidation compared with 1 minute.",
+      "ההשוואה נעשתה לעומת מנוחה, וחמצון השומנים היה גבוה יותר לאחר שתי דקות.",
     ).length,
     1,
   );
@@ -715,6 +729,54 @@ test("refinement restores a missing comparison target in one pass", async () => 
   assert.match(summary.reports[0] ?? "", /לעומת דקה אחת/);
 });
 
+test("refinement repairs a collapsed finding and a comparison that omits its target", async () => {
+  const translation = researchTranslation();
+  translation.mainFindings = [
+    {
+      id: "mainFindings.0.children.0",
+      text: "כל הפרוטוקולים עוררו תגובה מטבולית. במהלך המאמץ, שתי דקות העלו את סך חמצון השומנים לעומת דקה אחת, והתוצאות לא נבדלו באופן מובהק משלוש דקות. הוצאה אנרגטית נשארה מעל רמת המנוחה לאורך ההתאוששות אחרי פרוטוקולים של שתי דקות ושלוש דקות ובמהלך ההתאוששות חמצון השומנים והגלוקוז השתנו.",
+    },
+  ];
+  translation.seoDescription = sizedSeoDescription(
+    "ניסוי מוצלב אקראי בקרב 20 סטודנטים השווה נשנושי רכיבה של דקה, שתי דקות ושלוש דקות לעומת מנוחה, וחמצון השומנים היה גבוה יותר לאחר שתי דקות.",
+  );
+  const repairedFindings = researchTranslation().mainFindings;
+  const repairedSeo = researchTranslation().seoDescription;
+  let writes = 0;
+  const { calls, request, summary } = await localizeOnce(
+    translation,
+    { seoDescription: repairedSeo, mainFindings: repairedFindings },
+    () => {
+      writes += 1;
+    },
+  );
+  const report = summary.reports[0] ?? "";
+  const diagnostics = report.indexOf("Refinement triggered:");
+  const finalDocument = report.indexOf("Final Hebrew document:");
+  const findingsLine = report.indexOf("main findings:");
+  assert.equal(calls, 1);
+  assert.equal(writes, 0);
+  assert.ok(diagnostics >= 0 && diagnostics < finalDocument && finalDocument < findingsLine);
+  assert.match(report, /Refinement triggered: yes/);
+  assert.match(report, /collapsed into/);
+  assert.match(report, /without saying higher than what/);
+  assert.match(report, /Fields selected for repair:\n- seoDescription\n- mainFindings/);
+  assert.match(report, /Refinement model call completed: yes/);
+  assert.match(report, /Fields returned by refinement:\n- seoDescription\n- mainFindings/);
+  assert.match(report, /Warnings resolved:/);
+  assert.match(report, /עלייה בחמצון השומנים/);
+  assert.match(report, /גבוה יותר לעומת דקה אחת/);
+  assert.doesNotMatch(reviewNotes(report), /collapsed into|without saying higher than what/);
+  assert.match(reviewNotes(report), /language switch/);
+  assert.deepEqual(request?.fields, ["seoDescription", "mainFindings"]);
+  assert.doesNotMatch(request?.warnings.join("\n") ?? "", /translationSlug|language switch/);
+  assert.match(request?.input ?? "", /increased total fat oxidation compared with/);
+  assert.match(request?.input ?? "", /finding greater fat oxidation/);
+  assert.doesNotMatch(request?.input ?? "", /10\.3389/);
+  assert.equal(summary.dryRun, 1);
+  assert.equal(summary.created, 0);
+});
+
 test("refinement restores a directional finding that was collapsed", async () => {
   const broken = withFindings(
     "במהלך המאמץ חמצון השומנים השתנה. ההוצאה האנרגטית נשארה מעל רמת המנוחה.",
@@ -765,7 +827,7 @@ test("a warning that survives refinement stays in the review note", async () => 
   const broken = withFindings("במהלך המאמץ חמצון השומנים השתנה. ההוצאה האנרגטית נשארה מעל רמת המנוחה.");
   const { summary } = await localizeOnce(broken, { mainFindings: broken.mainFindings });
   const report = summary.reports[0] ?? "";
-  assert.match(report, /Warnings after refinement:/);
+  assert.match(report, /Warnings remaining:/);
   assert.match(reviewNotes(report), /collapsed into/);
   assert.match(report, /translationStatus: needs_review/);
 });
@@ -778,7 +840,8 @@ test("a missing translationSlug note does not trigger refinement", async () => {
   const report = summary.reports[0] ?? "";
   assert.match(report, /Refinement triggered: no/);
   assert.match(reviewNotes(report), /language switch/);
-  assert.match(report, /Fields repaired: none/);
+  assert.match(report, /Fields selected for repair:\n- none/);
+  assert.match(report, /Refinement model call completed: no/);
 });
 
 test("refinement does not publish", async () => {

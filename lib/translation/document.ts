@@ -130,11 +130,41 @@ export function formatTranslationReport(
     triggered: boolean;
     warningsBefore: readonly string[];
     repairedFields: readonly string[];
+    modelCallCompleted: boolean;
+    fieldsReturned: readonly string[];
     warningsAfter: readonly string[];
     resolvedWarnings: readonly string[];
+    mergeError?: string;
   },
 ): string {
-  const lines = [
+  const lines: string[] = [];
+  if (refinement) {
+    lines.push(
+      `Refinement triggered: ${refinement.triggered ? "yes" : "no"}`,
+      "",
+      "Warnings before refinement:",
+      ...noteLines(refinement.warningsBefore),
+      "",
+      "Fields selected for repair:",
+      ...noteLines(refinement.repairedFields),
+      "",
+      `Refinement model call completed: ${refinement.modelCallCompleted ? "yes" : "no"}`,
+      "",
+      "Fields returned by refinement:",
+      ...noteLines(refinement.fieldsReturned),
+      "",
+      "Warnings resolved:",
+      ...noteLines(refinement.resolvedWarnings),
+      "",
+      "Warnings remaining:",
+      ...noteLines(refinement.warningsAfter),
+    );
+    if (refinement.mergeError) {
+      lines.push("", `Repair merge: no. ${refinement.mergeError}`);
+    }
+    lines.push("", "Final Hebrew document:", "");
+  }
+  lines.push(
     "Hebrew localization",
     `Type: ${draft._type}`,
     `Source: ${publishedSourceId(source._id)}`,
@@ -145,7 +175,7 @@ export function formatTranslationReport(
     `translationStatus: ${draft.translationStatus}`,
     "Published: no",
     "",
-  ];
+  );
 
   if (draft._type === "research") {
     lines.push(
@@ -173,20 +203,6 @@ export function formatTranslationReport(
       `seoTitle (${[...draft.seoTitle].length} characters): ${draft.seoTitle}`,
       `seoDescription (${[...draft.seoDescription].length} characters): ${draft.seoDescription}`,
       `body: ${plain(draft.body)}`,
-    );
-  }
-
-  if (refinement) {
-    lines.push(
-      "",
-      `Refinement triggered: ${refinement.triggered ? "yes" : "no"}`,
-      "Warnings before refinement:",
-      ...noteLines(refinement.warningsBefore),
-      `Fields repaired: ${refinement.repairedFields.join(", ") || "none"}`,
-      "Warnings resolved:",
-      ...noteLines(refinement.resolvedWarnings),
-      "Warnings after refinement:",
-      ...noteLines(refinement.warningsAfter),
     );
   }
 
