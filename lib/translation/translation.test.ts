@@ -32,6 +32,7 @@ import { buildTranslationInstructions } from "./prompt";
 import {
   associationWarnings,
   awkwardPhrasingWarnings,
+  acuteResponseWarnings,
   mainFindingDirectionWarnings,
   numberWarnings,
   participantWordingWarnings,
@@ -207,6 +208,18 @@ test("SEO titles are warned only when vague or longer than 60", () => {
 
 test("Hebrew words for 1–10 preserve ordinary counts and do not replace strict numbers", () => {
   assert.deepEqual(numberWarnings("1 minute", "דקה אחת", "duration"), []);
+  assert.deepEqual(numberWarnings("1 minute", "דקה", "duration"), []);
+  assert.deepEqual(numberWarnings("1-minute", "הדקה", "duration"), []);
+  assert.equal(numberWarnings("1 minute", "דקות", "duration").length, 1);
+  assert.deepEqual(numberWarnings("1-, 2-, and 3-minute", "דקה, שתי דקות ושלוש דקות", "comparator"), []);
+  assert.deepEqual(numberWarnings("1 hour", "שעה", "duration"), []);
+  assert.deepEqual(numberWarnings("2 hours", "שעתיים", "duration"), []);
+  assert.deepEqual(numberWarnings("2 hours", "שתי שעות", "duration"), []);
+  assert.match(numberWarnings("1 W", "ואט אחד", "intervention")[0], /\b1\b/);
+  assert.match(numberWarnings("1 bpm", "פעימה אחת", "outcomes")[0], /\b1\b/);
+  assert.match(numberWarnings("heart rate of 1", "פעימה אחת", "outcomes")[0], /\b1\b/);
+  assert.match(numberWarnings("1 year", "שנה אחת", "duration")[0], /\b1\b/);
+  assert.match(numberWarnings("a 1 mg dose", "מנה של מיליגרם אחד", "intervention")[0], /\b1\b/);
   assert.deepEqual(numberWarnings("2 minutes", "שתי דקות", "duration"), []);
   assert.deepEqual(numberWarnings("3 minutes", "שלוש דקות", "duration"), []);
   assert.deepEqual(numberWarnings("2 minutes", "שני דקות", "duration"), []);
@@ -286,6 +299,28 @@ test("intervention contrasts are not forced into association wording", () => {
   assert.deepEqual(participantWordingWarnings("בעלי אורח חיים יושבני"), []);
   assert.deepEqual(participantWordingWarnings("התנהגות יושבנית"), []);
   assert.equal(awkwardPhrasingWarnings("מפגשים חד־פעמיים של פעילות אקוטית").length, 1);
+  assert.deepEqual(awkwardPhrasingWarnings("תגובות מטבוליות אקוטיות"), []);
+  assert.equal(
+    acuteResponseWarnings("acute metabolic responses", "תגובות מטבוליות חריפות").length,
+    1,
+  );
+  assert.deepEqual(
+    acuteResponseWarnings("acute metabolic responses", "תגובות מטבוליות מיידיות"),
+    [],
+  );
+  assert.deepEqual(acuteResponseWarnings("acute effects", "השפעות מיידיות"), []);
+  assert.deepEqual(
+    missingGlossaryTerms("a randomized crossover study", "ניסוי מוצלב אקראי"),
+    [],
+  );
+  assert.equal(
+    associationWarnings({
+      sourceText: "The controlled trial increased fat oxidation.",
+      hebrew: "שתי דקות נקשרו לחמצון שומנים.",
+      studyDesign: "controlled-trial",
+    }).length,
+    1,
+  );
   assert.deepEqual(
     awkwardPhrasingWarnings("מפגשי פעילות חד־פעמיים, עם 7 ימים בין המפגשים ומעקב של 30 דקות לאחר הפעילות"),
     [],
