@@ -33,7 +33,10 @@ import {
   associationWarnings,
   awkwardPhrasingWarnings,
   acuteResponseWarnings,
+  betweenPersonWarnings,
   mainFindingDirectionWarnings,
+  seoComparisonWarnings,
+  untestedLongTermWarnings,
   numberWarnings,
   participantWordingWarnings,
   preservationWarnings,
@@ -328,10 +331,59 @@ test("intervention contrasts are not forced into association wording", () => {
   const sourceFindings =
     "During exercise, 2 minutes increased total fat oxidation compared with 1 minute, while results were not significantly different from 3 minutes. Energy expenditure remained above resting levels throughout recovery after the 2- and 3-minute protocols; recovery fat and glucose oxidation also shifted.";
   const kept =
-    "במהלך המאמץ נמצא חמצון שומנים גבוה יותר לאחר שתי דקות לעומת דקה אחת, ללא הבדל מובהק לעומת שלוש דקות. ההוצאה האנרגטית נשארה מעל רמת המנוחה. בהתאוששות חל שינוי בחמצון שומנים ובחמצון גלוקוז.";
+    "במהלך המאמץ נמצא חמצון שומנים גבוה יותר לאחר שתי דקות לעומת דקה אחת, ללא הבדל מובהק לעומת שלוש דקות. ההוצאה האנרגטית נשארה מעל רמת המנוחה. בהתאוששות עלה חמצון שומנים וירד חמצון הגלוקוז.";
   assert.deepEqual(mainFindingDirectionWarnings(sourceFindings, kept), []);
   const dropped = mainFindingDirectionWarnings(sourceFindings, "נמצאה תגובה מטבולית.");
   assert.equal(dropped.length >= 4, true);
+  const flattened = mainFindingDirectionWarnings(
+    sourceFindings,
+    "במהלך המאמץ נמצא חמצון שומנים גבוה יותר לעומת דקה אחת, ללא הבדל מובהק, וההוצאה האנרגטית נשארה מעל המנוחה. חמצון השומנים והגלוקוז השתנו.",
+  );
+  assert.equal(flattened.some((warning) => warning.includes("recovery direction")), true);
+  assert.equal(
+    betweenPersonWarnings({
+      sourceText: "Within-participant comparison of 1-, 2-, and 3-minute protocols",
+      hebrew: "השוואה בין־אישית של פרוטוקולים",
+      studyDesign: "crossover-study",
+    }).length,
+    1,
+  );
+  assert.deepEqual(
+    betweenPersonWarnings({
+      sourceText: "Within-participant comparison of 1-, 2-, and 3-minute protocols",
+      hebrew: "השוואה בתוך אותם משתתפים בין פרוטוקולים של נשנוש כושר שנמשכו דקה, שתי דקות ושלוש דקות",
+      studyDesign: "crossover-study",
+    }),
+    [],
+  );
+  assert.equal(
+    untestedLongTermWarnings(
+      "Single acute sessions. The study did not establish longer-term health benefits.",
+      "המחקר לא הראה באופן ברור יתרונות בריאותיים לטווח ארוך.",
+    ).length,
+    1,
+  );
+  assert.deepEqual(
+    untestedLongTermWarnings(
+      "Single acute sessions. The study did not establish longer-term health benefits.",
+      "המחקר לא בחן יתרונות בריאותיים לטווח ארוך.",
+    ),
+    [],
+  );
+  assert.equal(
+    seoComparisonWarnings(
+      "2 minutes increased fat oxidation compared with 1 minute.",
+      "שתי דקות הובילו לחמצון שומנים גבוה יותר.",
+    ).length,
+    1,
+  );
+  assert.deepEqual(
+    seoComparisonWarnings(
+      "2 minutes increased fat oxidation compared with 1 minute.",
+      "שתי דקות הובילו לחמצון שומנים גבוה יותר לעומת דקה אחת.",
+    ),
+    [],
+  );
 });
 
 test("Hebrew drafts link on translationSlug and do not duplicate", async () => {
@@ -695,11 +747,12 @@ function researchTranslation(): ResearchTranslation {
       "בקרב 20 סטודנטים יושבניים, בדיקה מוצלבת אקראית השוותה נשנושי כושר של 1, 2 ו־3 דקות על אופניים. שתי דקות לוו ביותר חמצון שומנים מאשר דקה אחת, והתגובה הייתה דומה בקירוב לשלוש דקות.",
     seoTitle: "נשנוש כושר של שתי דקות עשוי להגביר חמצון שומנים",
     seoDescription: sizedSeoDescription(
-      "מחקר מוצלב ב־20 סטודנטים השווה נשנושי כושר של 1, 2 ו־3 דקות ומצא יותר חמצון שומנים ב־2 דקות, בלי להסיק מעבר למדגם.",
+      "ניסוי מוצלב אקראי ב־20 סטודנטים השווה דקה, שתי דקות ושלוש דקות, ומצא כי שתי דקות הובילו לחמצון שומנים גבוה יותר לעומת דקה אחת.",
     ),
     population: "עשרים סטודנטים גברים בעלי אורח חיים יושבני",
     duration: "מפגשי פעילות חד־פעמיים, עם 7 ימים בין המפגשים ומעקב של 30 דקות לאחר הפעילות",
-    comparator: "השוואה בתוך הנבדק בין פרוטוקולי נשנוש כושר של 1, 2 ו־3 דקות",
+    comparator:
+      "השוואה בתוך אותם משתתפים בין פרוטוקולים של נשנוש כושר שנמשכו דקה, שתי דקות ושלוש דקות",
     outcomes: [
       { id: "outcomes.0", text: "הוצאה אנרגטית" },
       { id: "outcomes.1", text: "חמצון שומנים" },
@@ -715,13 +768,13 @@ function researchTranslation(): ResearchTranslation {
     mainFindings: [
       {
         id: "mainFindings.0.children.0",
-        text: "כל הפרוטוקולים עוררו תגובה מטבולית. במהלך המאמץ, 2 דקות העלו את סך חמצון שומנים לעומת 1 דקה, והתוצאות לא נבדלו באופן מובהק מ־3 דקות. הוצאה אנרגטית נשארה מעל רמת המנוחה לאורך ההתאוששות אחרי פרוטוקולי 2 ו־3 הדקות. בהתאוששות חל שינוי בחמצון שומנים ובחמצון גלוקוז.",
+        text: "כל הפרוטוקולים עוררו תגובה מטבולית. במהלך המאמץ, 2 דקות העלו את סך חמצון שומנים לעומת 1 דקה, והתוצאות לא נבדלו באופן מובהק מ־3 דקות. הוצאה אנרגטית נשארה מעל רמת המנוחה לאורך ההתאוששות אחרי פרוטוקולי 2 ו־3 הדקות. בהתאוששות עלה חמצון שומנים וירד חמצון הגלוקוז.",
       },
     ],
     practicalInterpretation: [
       {
         id: "practicalInterpretation.0.children.0",
-        text: "אצל הסטודנטים האלה, נשנוש רכיבה של 2 דקות לווה בחמצון שומנים גבוה יותר בזמן המאמץ מאשר 1 דקה, ובתגובה דומה בקירוב ל־3 דקות. המחקר לא הראה באופן ברור תועלת בריאותית לטווח ארוך.",
+        text: "אצל הסטודנטים האלה, נשנוש רכיבה של 2 דקות לווה בחמצון שומנים גבוה יותר בזמן המאמץ מאשר 1 דקה, ובתגובה דומה בקירוב ל־3 דקות. המחקר לא בחן יתרונות בריאותיים לטווח ארוך.",
       },
     ],
     limitations: [
