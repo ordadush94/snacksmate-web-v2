@@ -31,6 +31,10 @@ import { buildTranslationRequest, requestHebrewLocalization } from "./openai";
 import { buildTranslationInstructions } from "./prompt";
 import {
   associationWarnings,
+  awkwardPhrasingWarnings,
+  mainFindingDirectionWarnings,
+  numberWarnings,
+  participantWordingWarnings,
   preservationWarnings,
   seoLengthWarnings,
   suspiciousLiteralWarnings,
@@ -79,6 +83,10 @@ test("glossary is the only terminology source and matches longer phrases first",
     missingGlossaryTerms("was associated with lower risk", "נמצא קשר וסיכון נמוך יותר").length,
     0,
   );
+  assert.match(instructions, /בעלי אורח חיים יושבני/);
+  assert.match(instructions, /45–60 characters is a target, not a minimum/);
+  assert.match(instructions, /מפגשי פעילות חד־פעמיים/);
+  assert.match(instructions, /לאחר שתי דקות נמצא חמצון שומנים גבוה יותר לעומת דקה אחת/);
 });
 
 test("suspicious literal Hebrew is flagged", () => {
@@ -140,6 +148,11 @@ test("research preserves numbers, DOI, journal, title, and sample size", () => {
   assert.equal(String(plain(draft.intervention)).includes("30"), true);
   assert.equal(draft.excerpt.includes("20"), true);
   assert.equal(draft.translationSlug, source.slug);
+  assert.match(draft.translationReviewNote ?? "", /language switch/);
+  assert.doesNotMatch(
+    draft.translationReviewNote ?? "",
+    /missing source number|SEO title|פעילות אקוטית|בעלי התנהגות יושבנית/,
+  );
   assert.equal(translatableSpans(source).some((span) => span.id === "title"), false);
   assert.equal(portableTextSpans(source.limitations, "limitations")[0].text.startsWith("Design-level"), false);
   assert.equal(String(plain(draft.limitations)).includes("Design-level limitation"), false);
@@ -173,11 +186,117 @@ test("observational association wording is not turned into causation", () => {
   assert.deepEqual(trial, []);
 });
 
-test("SEO length targets are flagged outside 45–60 and 140–160", () => {
+test("SEO titles are warned only when vague or longer than 60", () => {
   assert.deepEqual(seoLengthWarnings(hebrewChars(50), hebrewChars(150)), []);
-  const warnings = seoLengthWarnings(hebrewChars(44), hebrewChars(161));
-  assert.equal(warnings.length, 2);
+  assert.deepEqual(
+    seoLengthWarnings("נשנוש כושר של שתי דקות וחמצון שומנים", hebrewChars(150)),
+    [],
+  );
+  assert.deepEqual(seoLengthWarnings(hebrewChars(44), hebrewChars(150)), []);
+  const longTitle = seoLengthWarnings(hebrewChars(61), hebrewChars(150));
+  assert.equal(longTitle.length, 1);
+  assert.match(longTitle[0], /longer than 60/);
+  const description = seoLengthWarnings(hebrewChars(50), hebrewChars(161));
+  assert.equal(description.length, 1);
+  assert.match(description[0], /SEO description/);
+  const vague = seoLengthWarnings("מחקר", hebrewChars(150));
+  assert.equal(vague.length, 1);
+  assert.match(vague[0], /too vague/);
   assert.equal(textLength(hebrewChars(50)), 50);
+});
+
+test("Hebrew words for 1–10 preserve ordinary counts and do not replace strict numbers", () => {
+  assert.deepEqual(numberWarnings("1 minute", "דקה אחת", "duration"), []);
+  assert.deepEqual(numberWarnings("2 minutes", "שתי דקות", "duration"), []);
+  assert.deepEqual(numberWarnings("3 minutes", "שלוש דקות", "duration"), []);
+  assert.deepEqual(numberWarnings("2 minutes", "שני דקות", "duration"), []);
+  assert.deepEqual(numberWarnings("1-, 2-, and 3-minute", "דקה אחת, שתי דקות ושלוש דקות", "comparator"), []);
+  assert.deepEqual(
+    numberWarnings(
+      "lasting 1, 2, or 3 minutes, with 10 seconds and 30 W",
+      "דקה אחת, שתי דקות או שלוש דקות, עם 10 שניות ו־30 ואט",
+      "intervention",
+    ),
+    [],
+  );
+
+  const seconds = numberWarnings("every 10 seconds", "כל עשר שניות", "intervention");
+  assert.equal(seconds.length, 1);
+  assert.match(seconds[0], /10/);
+  const watts = numberWarnings("30 W", "שלושים ואט", "intervention");
+  assert.match(watts[0], /30/);
+  const washout = numberWarnings("a 7-day washout", "שבעה ימים בין המפגשים", "duration");
+  assert.match(washout[0], /7/);
+  const sample = numberWarnings("In 20 students", "בקרב עשרים סטודנטים", "excerpt");
+  assert.match(sample[0], /20/);
+  const smallSample = numberWarnings("n = 8", "שמונה משתתפים", "excerpt");
+  assert.match(smallSample[0], /\b8\b/);
+  const participants = numberWarnings("2 men", "שני גברים", "population");
+  assert.match(participants[0], /\b2\b/);
+  const percent = numberWarnings("fat oxidation rose 5%", "עלייה של חמישה אחוזים", "findings");
+  assert.match(percent[0], /5/);
+  const year = numberWarnings("published in 2026", "פורסם בשנת אלפיים", "excerpt");
+  assert.match(year[0], /2026/);
+  const dose = numberWarnings("a 2 mg dose", "מנה של שני מיליגרם", "intervention");
+  assert.match(dose[0], /\b2\b/);
+  const effect = numberWarnings("HR = 2", "יחס סיכונים של שתיים", "findings");
+  assert.match(effect[0], /\b2\b/);
+  const interval = numberWarnings("95% CI 1 to 4", "רווח בר-סמך מאחת עד ארבע", "findings");
+  assert.match(interval[0], /95/);
+  assert.match(interval[0], /\b1\b/);
+  const probability = numberWarnings("p = 0.05", "ערך p של חמש מאיות", "findings");
+  assert.match(probability[0], /0\.05/);
+  assert.deepEqual(numberWarnings("10 seconds and 2 minutes", "10 שניות ושתי דקות", "intervention"), []);
+  assert.equal(numberWarnings("2 minutes and 2 mg", "שתי דקות ושני מיליגרם", "intervention").some((warning) => warning.includes("2")), true);
+});
+
+test("intervention contrasts are not forced into association wording", () => {
+  const crossover = associationWarnings({
+    sourceText: "Two minutes increased fat oxidation compared with one minute.",
+    hebrew: "שתי דקות נקשרו לחמצון שומנים גבוה יותר.",
+    studyDesign: "crossover-study",
+  });
+  assert.equal(crossover.length, 1);
+  assert.match(crossover[0], /נמצא קשר/);
+  assert.deepEqual(
+    associationWarnings({
+      sourceText: "Two minutes increased fat oxidation compared with one minute.",
+      hebrew: "לאחר שתי דקות נמצא חמצון שומנים גבוה יותר לעומת דקה אחת.",
+      studyDesign: "crossover-study",
+    }),
+    [],
+  );
+  assert.deepEqual(
+    associationWarnings({
+      sourceText: "A randomized crossover study found greater fat oxidation with 2 minutes.",
+      hebrew:
+        "ניסוי מוצלב אקראי מצא כי שתי דקות רכיבה הובילו לחמצון שומנים גבוה יותר לעומת דקה אחת.",
+      studyDesign: "crossover-study",
+    }),
+    [],
+  );
+  const missingAssociation = associationWarnings({
+    sourceText: "Walking was associated with lower risk.",
+    hebrew: "ההליכה הופיעה יחד עם סיכון נמוך יותר.",
+    studyDesign: "cohort-study",
+  });
+  assert.equal(missingAssociation.length, 1);
+  assert.match(missingAssociation[0], /נמצא קשר/);
+  assert.equal(participantWordingWarnings("בעלי התנהגות יושבנית").length, 1);
+  assert.deepEqual(participantWordingWarnings("בעלי אורח חיים יושבני"), []);
+  assert.deepEqual(participantWordingWarnings("התנהגות יושבנית"), []);
+  assert.equal(awkwardPhrasingWarnings("מפגשים חד־פעמיים של פעילות אקוטית").length, 1);
+  assert.deepEqual(
+    awkwardPhrasingWarnings("מפגשי פעילות חד־פעמיים, עם 7 ימים בין המפגשים ומעקב של 30 דקות לאחר הפעילות"),
+    [],
+  );
+  const sourceFindings =
+    "During exercise, 2 minutes increased total fat oxidation compared with 1 minute, while results were not significantly different from 3 minutes. Energy expenditure remained above resting levels throughout recovery after the 2- and 3-minute protocols; recovery fat and glucose oxidation also shifted.";
+  const kept =
+    "במהלך המאמץ נמצא חמצון שומנים גבוה יותר לאחר שתי דקות לעומת דקה אחת, ללא הבדל מובהק לעומת שלוש דקות. ההוצאה האנרגטית נשארה מעל רמת המנוחה. בהתאוששות חל שינוי בחמצון שומנים ובחמצון גלוקוז.";
+  assert.deepEqual(mainFindingDirectionWarnings(sourceFindings, kept), []);
+  const dropped = mainFindingDirectionWarnings(sourceFindings, "נמצאה תגובה מטבולית.");
+  assert.equal(dropped.length >= 4, true);
 });
 
 test("Hebrew drafts link on translationSlug and do not duplicate", async () => {
@@ -543,8 +662,8 @@ function researchTranslation(): ResearchTranslation {
     seoDescription: sizedSeoDescription(
       "מחקר מוצלב ב־20 סטודנטים השווה נשנושי כושר של 1, 2 ו־3 דקות ומצא יותר חמצון שומנים ב־2 דקות, בלי להסיק מעבר למדגם.",
     ),
-    population: "עשרים סטודנטים יושבניים בקולג׳",
-    duration: "מפגשים חדים נפרדים עם 7 ימי שטיפה ו־30 דקות מעקב אחרי המאמץ",
+    population: "עשרים סטודנטים גברים בעלי אורח חיים יושבני",
+    duration: "מפגשי פעילות חד־פעמיים, עם 7 ימים בין המפגשים ומעקב של 30 דקות לאחר הפעילות",
     comparator: "השוואה בתוך הנבדק בין פרוטוקולי נשנוש כושר של 1, 2 ו־3 דקות",
     outcomes: [
       { id: "outcomes.0", text: "הוצאה אנרגטית" },
@@ -561,7 +680,7 @@ function researchTranslation(): ResearchTranslation {
     mainFindings: [
       {
         id: "mainFindings.0.children.0",
-        text: "כל הפרוטוקולים עוררו תגובה מטבולית חדה. במהלך המאמץ, 2 דקות העלו את סך חמצון שומנים לעומת 1 דקה, והתוצאות לא נבדלו באופן מובהק מ־3 דקות. הוצאה אנרגטית נשארה מעל רמת המנוחה לאורך ההתאוששות אחרי פרוטוקולי 2 ו־3 הדקות.",
+        text: "כל הפרוטוקולים עוררו תגובה מטבולית. במהלך המאמץ, 2 דקות העלו את סך חמצון שומנים לעומת 1 דקה, והתוצאות לא נבדלו באופן מובהק מ־3 דקות. הוצאה אנרגטית נשארה מעל רמת המנוחה לאורך ההתאוששות אחרי פרוטוקולי 2 ו־3 הדקות. בהתאוששות חל שינוי בחמצון שומנים ובחמצון גלוקוז.",
       },
     ],
     practicalInterpretation: [

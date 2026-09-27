@@ -52,7 +52,7 @@ export const HEBREW_SCIENTIFIC_GLOSSARY: readonly GlossaryEntry[] = [
     sources: ["sedentary behavior"],
     hebrew: ["התנהגות יושבנית"],
     usage:
-      "For the adjective sedentary, prefer יושבני / יושבנית / יושבניים. Never write ישיבה התנהגותית.",
+      "When sedentary describes participants, write בעל אורח חיים יושבני or בעלי אורח חיים יושבני. Keep התנהגות יושבנית when sedentary behavior is the outcome or the exposure. Do not write בעלי התנהגות יושבנית for participants. Never write ישיבה התנהגותית.",
   },
   {
     id: "physically-inactive",
@@ -162,7 +162,7 @@ export const HEBREW_SCIENTIFIC_GLOSSARY: readonly GlossaryEntry[] = [
     sources: ["association", "associated"],
     hebrew: ["קשר"],
     usage:
-      "This is a statistical association. Do not translate it as a causal effect, and do not write הפחית, גרם, or השפעה סיבתית in its place.",
+      "Use this for an observational association. Do not translate it as a causal effect, and do not write הפחית, גרם, or השפעה סיבתית in its place. In a randomized or crossover intervention, describe the observed contrast instead of נמצא קשר or נקשר ל־.",
   },
   {
     id: "risk",
@@ -209,7 +209,7 @@ export const FORBIDDEN_HEBREW_LITERALS = [
   {
     id: "sedentary-literal",
     pattern: "ישיבה התנהגותית",
-    reason: "Use התנהגות יושבנית.",
+    reason: "Use התנהגות יושבנית for the behavior, or בעל אורח חיים יושבני for a participant.",
   },
 ] as const;
 
