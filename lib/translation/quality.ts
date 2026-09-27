@@ -11,10 +11,17 @@ export const SEO_TITLE_MAX = 60;
 export const SEO_DESCRIPTION_MIN = 140;
 export const SEO_DESCRIPTION_MAX = 160;
 
+const VAGUE_SEO_TITLE_LENGTH = 12;
+
 const OBSERVATIONAL_DESIGNS = new Set([
   "cohort-study",
   "cross-sectional-study",
   "observational-study",
+]);
+
+const INTERVENTION_DESIGNS = new Set([
+  "crossover-study",
+  "randomized-controlled-trial",
 ]);
 
 const ASSOCIATIVE_ENGLISH =
@@ -53,10 +60,12 @@ export function seoLengthWarnings(seoTitle: string, seoDescription: string): str
   const warnings: string[] = [];
   const titleLength = textLength(seoTitle);
   const descriptionLength = textLength(seoDescription);
-  if (titleLength < SEO_TITLE_MIN || titleLength > SEO_TITLE_MAX) {
+  if (titleLength > SEO_TITLE_MAX) {
     warnings.push(
-      `SEO title is ${titleLength} characters. The target is ${SEO_TITLE_MIN}–${SEO_TITLE_MAX}.`,
+      `SEO title is ${titleLength} characters, which is longer than ${SEO_TITLE_MAX}. ${SEO_TITLE_MIN}–${SEO_TITLE_MAX} is a target, not a minimum.`,
     );
+  } else if (titleLength > 0 && titleLength < VAGUE_SEO_TITLE_LENGTH) {
+    warnings.push("SEO title is too vague to describe the study.");
   }
   if (descriptionLength < SEO_DESCRIPTION_MIN || descriptionLength > SEO_DESCRIPTION_MAX) {
     warnings.push(
@@ -85,20 +94,90 @@ export function acronymWarnings(sourceText: string, hebrew: string): string[] {
   ).map((rule) => `Acronym ${rule.id} from the English source is missing in the Hebrew text.`);
 }
 
+const ASSOCIATION_HEBREW = /נמצא קשר|נמצא קשור|נקשר/;
+
 export function associationWarnings(input: {
   sourceText: string;
   hebrew: string;
   studyDesign?: string | null;
 }): string[] {
-  const observational = OBSERVATIONAL_DESIGNS.has(input.studyDesign?.trim() ?? "");
+  const design = input.studyDesign?.trim() ?? "";
+  const observational = OBSERVATIONAL_DESIGNS.has(design);
   const associative = ASSOCIATIVE_ENGLISH.test(input.sourceText);
-  if (!observational && !associative) return [];
-  if (!CAUSAL_HEBREW.some((pattern) => pattern.test(input.hebrew))) return [];
+  const intervention = INTERVENTION_DESIGNS.has(design);
+  const warnings: string[] = [];
+  if ((observational || associative) && CAUSAL_HEBREW.some((pattern) => pattern.test(input.hebrew))) {
+    warnings.push(
+      observational
+        ? "Causal Hebrew was introduced into an observational study. Keep association language, for example נמצא קשר."
+        : "The English uses association language, but the Hebrew states a causal effect. Use נמצא קשר / נמצא קשור ל־.",
+    );
+  } else if ((observational || associative) && !ASSOCIATION_HEBREW.test(input.hebrew)) {
+    warnings.push(
+      "Observational or associative findings need association language such as נמצא קשר or נקשר ל־.",
+    );
+  }
+  if (intervention && !associative && ASSOCIATION_HEBREW.test(input.hebrew)) {
+    warnings.push(
+      "This randomized or crossover study describes an intervention contrast. Do not use נמצא קשר or נקשר ל־ for that contrast.",
+    );
+  }
+  return warnings;
+}
+
+export function participantWordingWarnings(hebrew: string): string[] {
+  if (!/בעל(?:י|ת)? התנהגות יושבנית/.test(hebrew)) return [];
   return [
-    observational
-      ? "Causal Hebrew was introduced into an observational study. Keep association language, for example נמצא קשר."
-      : "The English uses association language, but the Hebrew states a causal effect. Use נמצא קשר / נמצא קשור ל־.",
+    "Participant description uses בעלי התנהגות יושבנית. Prefer בעל אורח חיים יושבני or בעלי אורח חיים יושבני. Keep התנהגות יושבנית for the behavior itself.",
   ];
+}
+
+export function awkwardPhrasingWarnings(hebrew: string): string[] {
+  const warnings: string[] = [];
+  if (/אקוטי/.test(hebrew)) {
+    warnings.push(
+      "Acute-session wording sounds translated. Prefer plain Hebrew such as מפגשי פעילות חד־פעמיים, and state the days between sessions.",
+    );
+  }
+  if (/שטיפה/.test(hebrew)) {
+    warnings.push("Washout was rendered as שטיפה. State the number of days between sessions.");
+  }
+  return warnings;
+}
+
+export function mainFindingDirectionWarnings(sourceText: string, hebrew: string): string[] {
+  if (!sourceText.trim() || !hebrew.trim()) return [];
+  const warnings: string[] = [];
+  const fatContrast =
+    /fat oxidation/i.test(sourceText) &&
+    /(?:increased|greater|higher|compared with)/i.test(sourceText);
+  if (fatContrast && !/לעומת|גבוה/.test(hebrew)) {
+    warnings.push(
+      "Main findings dropped a fat-oxidation contrast. Keep which condition was higher.",
+    );
+  }
+  if (/during exercise/i.test(sourceText) && fatContrast && !/מאמץ|במהלך הפעילות|בזמן הפעילות/.test(hebrew)) {
+    warnings.push("Main findings dropped that the fat-oxidation contrast was during exercise.");
+  }
+  if (/not significantly different/i.test(sourceText) && !/מובהק|לא נבדל|ללא הבדל/.test(hebrew)) {
+    warnings.push(
+      "Main findings dropped a non-significant comparison. Keep that the difference was not statistically significant.",
+    );
+  }
+  if (/above resting/i.test(sourceText) && !/מנוחה/.test(hebrew)) {
+    warnings.push("Main findings dropped a result that stayed above rest.");
+  }
+  if (
+    /fat oxidation/i.test(sourceText) &&
+    /glucose oxidation/i.test(sourceText) &&
+    /shift/i.test(sourceText) &&
+    (!hebrew.includes("חמצון שומנים") || !hebrew.includes("גלוקוז"))
+  ) {
+    warnings.push(
+      "Main findings dropped the recovery shift in fat oxidation and glucose oxidation.",
+    );
+  }
+  return warnings;
 }
 
 export function uncertaintyWarnings(sourceText: string, hebrew: string): string[] {
@@ -125,11 +204,24 @@ export function practicalInterpretationWarnings(hebrew: string): string[] {
 }
 
 export function numberWarnings(sourceText: string, hebrew: string, field: string): string[] {
-  const sourceNumbers = extractNumbers(sourceText);
+  const hits = extractNumberHits(sourceText);
   const translatedNumbers = new Set(extractNumbers(hebrew));
-  const missing = sourceNumbers.filter((number) => !translatedNumbers.has(number));
+  const wordValues = hebrewSmallIntegers(hebrew);
+  const seen = new Set<string>();
+  const missing: string[] = [];
+  for (const hit of hits) {
+    if (seen.has(hit.raw)) continue;
+    seen.add(hit.raw);
+    if (translatedNumbers.has(hit.raw)) continue;
+    const occurrences = hits.filter((item) => item.raw === hit.raw);
+    const wordEligible = occurrences.every((item) =>
+      isSmallIntegerWordEligible(sourceText, item.index, item.raw),
+    );
+    if (wordEligible && wordValues.has(hit.raw)) continue;
+    missing.push(hit.raw);
+  }
   if (missing.length === 0) return [];
-  return [`${field} is missing source number${missing.length === 1 ? "" : "s"}: ${unique(missing).join(", ")}.`];
+  return [`${field} is missing source number${missing.length === 1 ? "" : "s"}: ${missing.join(", ")}.`];
 }
 
 export function inventedNumberWarnings(sourceText: string, hebrew: string): string[] {
@@ -232,6 +324,15 @@ export function translationQualityWarnings(input: {
       hebrew,
       studyDesign: input.source._type === "research" ? input.source.studyDesign : null,
     }),
+    ...participantWordingWarnings(hebrew),
+    ...awkwardPhrasingWarnings(hebrew),
+    ...mainFindingDirectionWarnings(
+      input.source._type === "research" ? plainText(input.source.mainFindings) : "",
+      translatableSpans(input.source)
+        .filter((span) => span.field === "mainFindings")
+        .map((span) => input.translations.get(span.id) ?? "")
+        .join("\n"),
+    ),
     ...uncertaintyWarnings(sourceText, hebrew),
     ...practicalInterpretationWarnings(practical),
     ...perFieldNumbers,
@@ -288,6 +389,102 @@ function protectedPhrases(source: EnglishDocument): string[] {
 
 function extractNumbers(text: string): string[] {
   return text.match(/\d+(?:\.\d+)?/g) ?? [];
+}
+
+function extractNumberHits(text: string): Array<{ raw: string; index: number }> {
+  const hits: Array<{ raw: string; index: number }> = [];
+  const pattern = /\d+(?:\.\d+)?/g;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(text)) !== null) {
+    hits.push({ raw: match[0], index: match.index });
+  }
+  return hits;
+}
+
+/**
+ * Integers 1–10 may be written as Hebrew cardinals, including both genders
+ * and the construct form. A digit still has to appear when any occurrence
+ * is a sample size, percentage, year, unit, dose, effect size, confidence
+ * interval, or p-value. Minute counts are the ordinary prose exception.
+ */
+const SMALL_INTEGER_FORMS: ReadonlyArray<readonly [string, string]> = [
+  ["1", "אחת"],
+  ["1", "אחד"],
+  ["2", "שתיים"],
+  ["2", "שניים"],
+  ["2", "שתי"],
+  ["2", "שני"],
+  ["3", "שלושה"],
+  ["3", "שלושת"],
+  ["3", "שלוש"],
+  ["4", "ארבעה"],
+  ["4", "ארבעת"],
+  ["4", "ארבע"],
+  ["5", "חמישה"],
+  ["5", "חמשת"],
+  ["5", "חמש"],
+  ["6", "שישה"],
+  ["6", "ששת"],
+  ["6", "שש"],
+  ["7", "שבעה"],
+  ["7", "שבעת"],
+  ["7", "שבע"],
+  ["8", "שמונה"],
+  ["8", "שמונת"],
+  ["9", "תשעה"],
+  ["9", "תשעת"],
+  ["9", "תשע"],
+  ["10", "עשרה"],
+  ["10", "עשרת"],
+  ["10", "עשר"],
+];
+
+const MEASUREMENT_UNIT =
+  /^\s*-?\s*(?:watts?|kcal|kJ|mmHg|mmol|bpm|mcg|µg|μg|kg|mg|ml|mL|cm|mm|km|Hz|IUs?|METs?|reps?|sets?|seconds?|secs?|sec|hours?|hrs?|hr|days?|weeks?|months?|years?|yr|mol|ng|g|m|s|W|L)\b/i;
+
+function hebrewSmallIntegers(text: string): Set<string> {
+  const forms = [...SMALL_INTEGER_FORMS].sort((left, right) => right[1].length - left[1].length);
+  const byForm = new Map(forms.map(([value, form]) => [form, value]));
+  const pattern = new RegExp(
+    `(?<![\\u05D0-\\u05EA])(?:[והבלכמש][־-]?)?(${forms.map(([, form]) => form).join("|")})(?![\\u05D0-\\u05EA])`,
+    "g",
+  );
+  const found = new Set<string>();
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(text)) !== null) {
+    const value = byForm.get(match[1] ?? "");
+    if (value) found.add(value);
+  }
+  return found;
+}
+
+function isSmallIntegerWordEligible(text: string, index: number, raw: string): boolean {
+  if (!/^(?:[1-9]|10)$/.test(raw)) return false;
+  const before = text.slice(Math.max(0, index - 48), index);
+  const after = text.slice(index + raw.length, index + raw.length + 48);
+  if (/^(?:\s*|-\s*)(?:minutes?|min)\b/i.test(after)) return true;
+  if (/^\s*%/.test(after) || /^\s*percent(?:age)?\b/i.test(after)) return false;
+  if (/(?:\bp[\s-]*values?\b[^0-9]{0,12}|\bp\s*(?:=|<|≤|>)\s*)$/i.test(before)) return false;
+  if (/\b(?:CIs?|confidence\s+intervals?)\b/i.test(before)) return false;
+  if (/\byears?\b/i.test(before.slice(-16)) || /^\s*-?\s*years?\b/i.test(after)) return false;
+  if (/(?:\b[nN]\s*=\s*|\bsample\s+size\s*(?:of\s*)?|\bsample\s+of\s*)$/i.test(before)) return false;
+  if (
+    /^\s*(?:sedentary\s+|male\s+|female\s+|healthy\s+|young\s+|older\s+|college\s+)*(?:participants?|students?|men|women|males?|females?|subjects?|adults?|volunteers?|patients?|people)\b/i.test(
+      after,
+    )
+  ) {
+    return false;
+  }
+  if (/\b(?:doses?|dosages?)\s*(?:of\s*)?$/i.test(before)) return false;
+  if (
+    /(?:\b(?:Cohen(?:'s)?\s+)?d\s*=\s*|\b(?:OR|HR|RR|SMD|AOR|β|beta)\s*=\s*|\beffect\s+sizes?\s*(?:of\s*)?|\bodds\s+ratios?\s*(?:of\s*)?|\bhazard\s+ratios?\s*(?:of\s*)?)$/i.test(
+      before,
+    )
+  ) {
+    return false;
+  }
+  if (MEASUREMENT_UNIT.test(after)) return false;
+  return true;
 }
 
 function unique(values: string[]): string[] {
