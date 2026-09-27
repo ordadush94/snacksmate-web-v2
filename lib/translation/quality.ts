@@ -195,11 +195,36 @@ export function mainFindingDirectionWarnings(sourceText: string, hebrew: string)
       );
     if (!fatUp || !glucoseDown) {
       warnings.push(
-        "Main findings dropped the recovery direction. Keep greater fat oxidation and lower glucose oxidation. Do not reduce this to השתנו.",
+        "Main findings dropped the recovery direction. Keep greater fat oxidation and lower glucose oxidation, for example במהלך ההתאוששות נצפתה עלייה בחמצון השומנים לצד ירידה בחמצון הגלוקוז. Do not reduce this to השתנו, and do not add a magnitude or a p-value.",
       );
     }
   }
   return warnings;
+}
+
+const DIRECTIONAL_ENGLISH =
+  /\b(?:increas(?:e|ed|es|ing)|decreas(?:e|ed|es|ing)|higher|lower|greater|less)\b/i;
+const GENERIC_HEBREW_CHANGE = /(?<![\u05D0-\u05EA])השתנ(?:תה|ה|ו)(?![\u05D0-\u05EA])/;
+const HEBREW_DIRECTION = /עלייה|ירידה|עלה|ירד|גבוה|נמוך|יותר|פחות/;
+
+export function collapsedDirectionWarnings(sourceText: string, hebrew: string): string[] {
+  if (!DIRECTIONAL_ENGLISH.test(sourceText) || !hebrew.trim()) return [];
+  const vague = hebrew.split(/[.!?]/).filter((sentence) => {
+    return GENERIC_HEBREW_CHANGE.test(sentence) && !HEBREW_DIRECTION.test(sentence);
+  });
+  if (vague.length === 0) return [];
+  return [
+    "A directional English finding was collapsed into השתנה or השתנו. Keep increase, decrease, higher, or lower. When recovery fat oxidation rose and glucose oxidation fell, write במהלך ההתאוששות נצפתה עלייה בחמצון השומנים לצד ירידה בחמצון הגלוקוז. Do not add a magnitude or a p-value.",
+  ];
+}
+
+const MIXED_SIMPLE_DURATION = /(?:^|[^\d])[123]\s*דק(?:ה|ות)/;
+
+export function mixedDurationStyleWarnings(hebrew: string): string[] {
+  if (!MIXED_SIMPLE_DURATION.test(hebrew)) return [];
+  return [
+    "Simple durations mix digits with Hebrew prose. Write דקה, שתי דקות, שלוש דקות. Keep digits for scientific quantities such as 20 participants, 30 watts, 10 seconds, 180 watts, 7 days, and 30 minutes.",
+  ];
 }
 
 const BETWEEN_PERSON = /בין[־\-‑\s]?אישי|השוואה בין[־\-‑\s]?(?:ה)?(?:נבדקים|משתתפים|אנשים)/;
@@ -406,6 +431,14 @@ export function translationQualityWarnings(input: {
         .map((span) => input.translations.get(span.id) ?? "")
         .join("\n"),
     ),
+    ...collapsedDirectionWarnings(
+      input.source._type === "research" ? plainText(input.source.mainFindings) : sourceText,
+      translatableSpans(input.source)
+        .filter((span) => span.field === "mainFindings")
+        .map((span) => input.translations.get(span.id) ?? "")
+        .join("\n"),
+    ),
+    ...mixedDurationStyleWarnings(hebrew),
     ...uncertaintyWarnings(sourceText, hebrew),
     ...practicalInterpretationWarnings(practical),
     ...perFieldNumbers,
