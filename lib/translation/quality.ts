@@ -120,7 +120,7 @@ export function associationWarnings(input: {
   }
   if (intervention && !associative && ASSOCIATION_HEBREW.test(input.hebrew)) {
     warnings.push(
-      "This randomized, crossover, or controlled intervention uses association wording. In the excerpt, main findings, practical interpretation, and SEO description, use a direct comparison such as לאחר שתי דקות נמצא חמצון שומנים גבוה יותר לעומת דקה אחת. Do not write נמצא קשר or נקשר ל־.",
+      "This randomized, crossover, or controlled intervention uses association wording. In the excerpt, main findings, practical interpretation, and SEO description, use a direct comparison such as לאחר מצב B נמדד ערך גבוה יותר של מדד A לעומת מצב A. Do not write נמצא קשר or נקשר ל־.",
     );
   }
   return warnings;
@@ -153,69 +153,79 @@ export function acuteResponseWarnings(sourceText: string, hebrew: string): strin
   ];
 }
 
-export function mainFindingDirectionWarnings(sourceText: string, hebrew: string): string[] {
+const UP_ENGLISH = /\b(?:increas(?:e|ed|es|ing)|higher|greater|rose|risen)\b/i;
+const DOWN_ENGLISH = /\b(?:decreas(?:e|ed|es|ing)|lower|less|fell|fallen)\b/i;
+const COMPARISON_ENGLISH =
+  /\b(?:compared\s+with|compared\s+to|versus|vs\.?)\b|\b(?:higher|lower|greater|less)\s+than\b/i;
+const NON_SIG_ENGLISH =
+  /\b(?:not\s+significantly\s+different|not\s+statistically\s+significant|no\s+significant\s+difference|not\s+significantly\s+(?:higher|lower|greater|less))\b/i;
+const SIG_ENGLISH = /(?<!\bnot\s)\bsignificantly\s+(?:higher|lower|greater|less)\b/i;
+const ABOVE_ENGLISH = /\babove\b/i;
+const BELOW_ENGLISH = /\bbelow\b/i;
+
+const UP_HEBREW = /עלייה|עליית|עלה|עלו|גבוה/;
+const DOWN_HEBREW = /ירידה|ירידת|ירד|ירדו|נמוך|פחות|מתחת/;
+const COMPARISON_HEBREW = /לעומת|מאשר/;
+const NON_SIG_HEBREW =
+  /לא נמצא הבדל מובהק|לא נבדל|ללא הבדל|אינו מובהק|אינה מובהק|לא היה מובהק|לא היו מובהק|לא מובהק/;
+const ABOVE_HEBREW = /מעל/;
+const BELOW_HEBREW = /מתחת/;
+const GENERIC_HEBREW_CHANGE = /(?<![\u05D0-\u05EA])השתנ(?:תה|ה|ו)(?![\u05D0-\u05EA])/;
+const HEBREW_DIRECTION = /עלייה|ירידה|עלה|עלו|ירד|ירדו|גבוה|נמוך|יותר|פחות|מעל|מתחת/;
+
+function hasAffirmativeSignificance(hebrew: string): boolean {
+  const negation =
+    /לא נמצא הבדל מובהק(?:\s+סטטיסטית)?|לא נבדל[והתם]?(?:\s+באופן\s+מובהק)?|ללא הבדל(?:\s+מובהק(?:\s+סטטיסטית)?)?|אינ[וה]\s+מובהק|לא היה מובהק|לא היו מובהק|לא מובהק/g;
+  return /מובהק/.test(hebrew.replace(negation, ""));
+}
+
+export function collapsedDirectionWarnings(sourceText: string, hebrew: string): string[] {
   if (!sourceText.trim() || !hebrew.trim()) return [];
   const warnings: string[] = [];
-  const fatContrast =
-    /fat oxidation/i.test(sourceText) &&
-    /(?:increased|greater|higher|compared with)/i.test(sourceText);
-  if (fatContrast && !/לעומת|גבוה/.test(hebrew)) {
+  const upward = UP_ENGLISH.test(sourceText);
+  const downward = DOWN_ENGLISH.test(sourceText);
+  if (upward && !UP_HEBREW.test(hebrew)) {
     warnings.push(
-      "Main findings dropped a fat-oxidation contrast. Keep which condition was higher.",
+      "Hebrew dropped an increase, rise, or higher result. Keep the upward direction, for example ערך גבוה יותר.",
     );
   }
-  if (/during exercise/i.test(sourceText) && fatContrast && !/מאמץ|במהלך הפעילות|בזמן הפעילות/.test(hebrew)) {
-    warnings.push("Main findings dropped that the fat-oxidation contrast was during exercise.");
-  }
-  if (/not significantly different/i.test(sourceText) && !/מובהק|לא נבדל|ללא הבדל/.test(hebrew)) {
+  if (downward && !DOWN_HEBREW.test(hebrew)) {
     warnings.push(
-      "Main findings dropped a non-significant comparison. Keep that the difference was not statistically significant.",
+      "Hebrew dropped a decrease, fall, or lower result. Keep the downward direction, for example ערך נמוך יותר.",
     );
   }
-  if (/above resting/i.test(sourceText) && !/מנוחה/.test(hebrew)) {
-    warnings.push("Main findings dropped a result that stayed above rest.");
+  if (COMPARISON_ENGLISH.test(sourceText) && !COMPARISON_HEBREW.test(hebrew)) {
+    warnings.push(
+      "Hebrew dropped the comparison target. Name the other side with לעומת or מאשר, for example ערך גבוה יותר של מדד A לעומת מצב A.",
+    );
   }
-  if (
-    /fat oxidation/i.test(sourceText) &&
-    /glucose oxidation/i.test(sourceText) &&
-    /shift/i.test(sourceText)
-  ) {
-    if (!/חמצון ה?שומנים/.test(hebrew) || !hebrew.includes("גלוקוז")) {
+  if (NON_SIG_ENGLISH.test(sourceText) && !NON_SIG_HEBREW.test(hebrew)) {
+    warnings.push(
+      "Hebrew dropped a non-significant result. Keep it explicit, for example לא נמצא הבדל מובהק סטטיסטית בין התנאים.",
+    );
+  }
+  if (SIG_ENGLISH.test(sourceText) && !hasAffirmativeSignificance(hebrew)) {
+    warnings.push(
+      "Hebrew dropped statistical significance. Keep that the difference was significant.",
+    );
+  }
+  if (ABOVE_ENGLISH.test(sourceText) && !ABOVE_HEBREW.test(hebrew)) {
+    warnings.push("Hebrew dropped a result that was above a reference level. Keep מעל.");
+  }
+  if (BELOW_ENGLISH.test(sourceText) && !BELOW_HEBREW.test(hebrew)) {
+    warnings.push("Hebrew dropped a result that was below a reference level. Keep מתחת.");
+  }
+  if (upward || downward) {
+    const vague = hebrew.split(/[.!?]/).filter((sentence) => {
+      return GENERIC_HEBREW_CHANGE.test(sentence) && !HEBREW_DIRECTION.test(sentence);
+    });
+    if (vague.length > 0) {
       warnings.push(
-        "Main findings dropped the recovery shift in fat oxidation and glucose oxidation.",
-      );
-    }
-    const fatUp =
-      /(?:עלה|עלייה|גבוה יותר|יותר)[^.\n]{0,60}חמצון ה?שומנים|חמצון ה?שומנים[^.\n]{0,60}(?:עלה|עלייה|גבוה|יותר)/.test(
-        hebrew,
-      );
-    const glucoseDown =
-      /(?:ירד|ירידה|פחות|נמוך)[^.\n]{0,60}גלוקוז|גלוקוז[^.\n]{0,60}(?:ירד|ירידה|פחות|נמוך)/.test(
-        hebrew,
-      );
-    if (!fatUp || !glucoseDown) {
-      warnings.push(
-        "Main findings dropped the recovery direction. Keep greater fat oxidation and lower glucose oxidation, for example במהלך ההתאוששות נצפתה עלייה בחמצון השומנים לצד ירידה בחמצון הגלוקוז. Do not reduce this to השתנו, and do not add a magnitude or a p-value.",
+        "A directional English finding was collapsed into השתנה or השתנו. Keep increase, decrease, higher, or lower. Do not add a magnitude or a p-value.",
       );
     }
   }
   return warnings;
-}
-
-const DIRECTIONAL_ENGLISH =
-  /\b(?:increas(?:e|ed|es|ing)|decreas(?:e|ed|es|ing)|higher|lower|greater|less)\b/i;
-const GENERIC_HEBREW_CHANGE = /(?<![\u05D0-\u05EA])השתנ(?:תה|ה|ו)(?![\u05D0-\u05EA])/;
-const HEBREW_DIRECTION = /עלייה|ירידה|עלה|ירד|גבוה|נמוך|יותר|פחות/;
-
-export function collapsedDirectionWarnings(sourceText: string, hebrew: string): string[] {
-  if (!DIRECTIONAL_ENGLISH.test(sourceText) || !hebrew.trim()) return [];
-  const vague = hebrew.split(/[.!?]/).filter((sentence) => {
-    return GENERIC_HEBREW_CHANGE.test(sentence) && !HEBREW_DIRECTION.test(sentence);
-  });
-  if (vague.length === 0) return [];
-  return [
-    "A directional English finding was collapsed into השתנה or השתנו. Keep increase, decrease, higher, or lower. When recovery fat oxidation rose and glucose oxidation fell, write במהלך ההתאוששות נצפתה עלייה בחמצון השומנים לצד ירידה בחמצון הגלוקוז. Do not add a magnitude or a p-value.",
-  ];
 }
 
 const MIXED_SIMPLE_DURATION = /(?:^|[^\d])[123]\s*דק(?:ה|ות)/;
@@ -223,7 +233,7 @@ const MIXED_SIMPLE_DURATION = /(?:^|[^\d])[123]\s*דק(?:ה|ות)/;
 export function mixedDurationStyleWarnings(hebrew: string): string[] {
   if (!MIXED_SIMPLE_DURATION.test(hebrew)) return [];
   return [
-    "Simple durations mix digits with Hebrew prose. Write דקה, שתי דקות, שלוש דקות. Keep digits for scientific quantities such as 20 participants, 30 watts, 10 seconds, 180 watts, 7 days, and 30 minutes.",
+    "Simple durations mix digits with Hebrew prose. Write דקה, שתי דקות, שלוש דקות. Keep digits for scientific quantities such as sample size, watts, seconds, heart rate, and doses.",
   ];
 }
 
@@ -260,10 +270,10 @@ export function seoComparisonWarnings(sourceText: string, seoDescription: string
     /\b(?:greater|higher|increased|more)\b/i.test(sourceText) &&
     /\b(?:compared with|than|versus)\b/i.test(sourceText);
   if (!comparison || !seoDescription.trim()) return [];
-  const claimsHigher = /גבוה יותר|יותר חמצון/.test(seoDescription);
+  const claimsHigher = /גבוה יותר|נמוך יותר|עלייה|ירידה/.test(seoDescription);
   if (claimsHigher && !/לעומת|מאשר/.test(seoDescription)) {
     return [
-      "SEO description states a higher result without saying higher than what. Include the comparison, for example שתי דקות הובילו לחמצון שומנים גבוה יותר לעומת דקה אחת.",
+      "SEO description states a higher result without saying higher than what. Include the comparison, for example ערך גבוה יותר של מדד A לעומת מצב A.",
     ];
   }
   return [];
@@ -424,19 +434,14 @@ export function translationQualityWarnings(input: {
     }),
     ...untestedLongTermWarnings(sourceText, hebrew),
     ...seoComparisonWarnings(sourceText, input.draft.seoDescription),
-    ...mainFindingDirectionWarnings(
-      input.source._type === "research" ? plainText(input.source.mainFindings) : "",
-      translatableSpans(input.source)
-        .filter((span) => span.field === "mainFindings")
-        .map((span) => input.translations.get(span.id) ?? "")
-        .join("\n"),
-    ),
     ...collapsedDirectionWarnings(
       input.source._type === "research" ? plainText(input.source.mainFindings) : sourceText,
-      translatableSpans(input.source)
-        .filter((span) => span.field === "mainFindings")
-        .map((span) => input.translations.get(span.id) ?? "")
-        .join("\n"),
+      input.source._type === "research"
+        ? translatableSpans(input.source)
+            .filter((span) => span.field === "mainFindings")
+            .map((span) => input.translations.get(span.id) ?? "")
+            .join("\n")
+        : hebrew,
     ),
     ...mixedDurationStyleWarnings(hebrew),
     ...uncertaintyWarnings(sourceText, hebrew),

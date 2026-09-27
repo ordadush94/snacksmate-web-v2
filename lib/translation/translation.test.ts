@@ -35,7 +35,6 @@ import {
   acuteResponseWarnings,
   betweenPersonWarnings,
   collapsedDirectionWarnings,
-  mainFindingDirectionWarnings,
   mixedDurationStyleWarnings,
   seoComparisonWarnings,
   untestedLongTermWarnings,
@@ -92,12 +91,16 @@ test("glossary is the only terminology source and matches longer phrases first",
   assert.match(instructions, /בעלי אורח חיים יושבני/);
   assert.match(instructions, /45–60 characters is a target, not a minimum/);
   assert.match(instructions, /מפגשי פעילות חד־פעמיים/);
-  assert.match(instructions, /לאחר שתי דקות נמצא חמצון שומנים גבוה יותר לעומת דקה אחת/);
-  assert.match(
-    instructions,
-    /במהלך ההתאוששות נצפתה עלייה בחמצון השומנים לצד ירידה בחמצון הגלוקוז/,
-  );
+  assert.match(instructions, /לאחר מצב B נמדד ערך גבוה יותר של מדד A לעומת מצב A/);
+  assert.match(instructions, /לא נמצא הבדל מובהק סטטיסטית בין התנאים/);
+  assert.match(instructions, /אותם משתתפים השלימו כל אחד מתנאי המחקר במסגרת מחקר מוצלב/);
+  assert.match(instructions, /המחקר לא בחן יתרונות בריאותיים לטווח ארוך/);
   assert.match(instructions, /דקה, שתי דקות, שלוש דקות/);
+  assert.doesNotMatch(promptSource, /42798426|two-minute exercise snack|7-day washout|180 W/i);
+  assert.doesNotMatch(promptSource, /במהלך ההתאוששות נצפתה עלייה בחמצון השומנים/);
+  const qualitySource = readFileSync(new URL("./quality.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(qualitySource, /42798426|fat oxidation|glucose oxidation|above resting|during exercise/i);
+  assert.doesNotMatch(qualitySource, /במהלך ההתאוששות נצפתה עלייה בחמצון השומנים/);
 });
 
 test("suspicious literal Hebrew is flagged", () => {
@@ -335,44 +338,84 @@ test("intervention contrasts are not forced into association wording", () => {
     awkwardPhrasingWarnings("מפגשי פעילות חד־פעמיים, עם 7 ימים בין המפגשים ומעקב של 30 דקות לאחר הפעילות"),
     [],
   );
-  const sourceFindings =
-    "During exercise, 2 minutes increased total fat oxidation compared with 1 minute, while results were not significantly different from 3 minutes. Energy expenditure remained above resting levels throughout recovery after the 2- and 3-minute protocols; recovery fat and glucose oxidation also shifted.";
-  const kept =
-    "במהלך המאמץ נמצא חמצון שומנים גבוה יותר לאחר שתי דקות לעומת דקה אחת, ללא הבדל מובהק לעומת שלוש דקות. ההוצאה האנרגטית נשארה מעל רמת המנוחה. בהתאוששות עלה חמצון שומנים וירד חמצון הגלוקוז.";
-  assert.deepEqual(mainFindingDirectionWarnings(sourceFindings, kept), []);
-  const dropped = mainFindingDirectionWarnings(sourceFindings, "נמצאה תגובה מטבולית.");
-  assert.equal(dropped.length >= 4, true);
-  const flattened = mainFindingDirectionWarnings(
-    sourceFindings,
-    "במהלך המאמץ נמצא חמצון שומנים גבוה יותר לעומת דקה אחת, ללא הבדל מובהק, וההוצאה האנרגטית נשארה מעל המנוחה. חמצון השומנים והגלוקוז השתנו.",
-  );
-  assert.equal(flattened.some((warning) => warning.includes("recovery direction")), true);
-  const recoveryDirection =
-    "במהלך ההתאוששות נצפתה עלייה בחמצון השומנים לצד ירידה בחמצון הגלוקוז.";
   assert.deepEqual(
-    mainFindingDirectionWarnings(
-      sourceFindings,
-      `במהלך המאמץ נמצא חמצון שומנים גבוה יותר לאחר שתי דקות לעומת דקה אחת, ללא הבדל מובהק לעומת שלוש דקות. ההוצאה האנרגטית נשארה מעל רמת המנוחה. ${recoveryDirection}`,
+    collapsedDirectionWarnings(
+      "Outcome A was higher after condition B than condition A.",
+      "לאחר מצב B נמדד ערך גבוה יותר של מדד A לעומת מצב A.",
     ),
     [],
   );
-  const collapsedSource =
-    "Fat oxidation increased whereas glucose oxidation decreased during recovery.";
-  assert.equal(
+  assert.deepEqual(
     collapsedDirectionWarnings(
-      collapsedSource,
-      "במהלך ההתאוששות השתנו גם חמצון השומנים וחמצון הגלוקוז.",
-    ).length,
-    1,
+      "Outcome A was lower after condition B than condition A.",
+      "לאחר מצב B נמדד ערך נמוך יותר של מדד A לעומת מצב A.",
+    ),
+    [],
+  );
+  assert.deepEqual(
+    collapsedDirectionWarnings(
+      "The difference between conditions was not statistically significant.",
+      "לא נמצא הבדל מובהק סטטיסטית בין התנאים.",
+    ),
+    [],
   );
   assert.equal(
     collapsedDirectionWarnings(
-      "During exercise, 2 minutes increased total fat oxidation compared with 1 minute. Recovery fat and glucose oxidation also shifted.",
-      "במהלך המאמץ נמצא חמצון שומנים גבוה יותר. במהלך ההתאוששות השתנו גם חמצון השומנים וחמצון הגלוקוז.",
+      "The difference between conditions was not statistically significant.",
+      "נמצא הבדל בין התנאים.",
+    ).some((warning) => warning.includes("non-significant")),
+    true,
+  );
+  assert.deepEqual(
+    collapsedDirectionWarnings(
+      "Condition B was significantly higher than condition A.",
+      "מצב B היה גבוה יותר באופן מובהק לעומת מצב A.",
+    ),
+    [],
+  );
+  assert.equal(
+    collapsedDirectionWarnings(
+      "Condition B was significantly higher than condition A.",
+      "מצב B היה גבוה יותר לעומת מצב A.",
+    ).some((warning) => warning.includes("significance")),
+    true,
+  );
+  assert.deepEqual(
+    collapsedDirectionWarnings(
+      "The value rose above the reference and then fell below it.",
+      "הערך עלה מעל נקודת הייחוס ואחר כך ירד מתחת לה.",
+    ),
+    [],
+  );
+  const sourceFindings =
+    "During exercise, 2 minutes increased total fat oxidation compared with 1 minute, while results were not significantly different from 3 minutes. Energy expenditure remained above resting levels throughout recovery after the 2- and 3-minute protocols; recovery fat and glucose oxidation also shifted.";
+  const kept =
+    "במהלך המאמץ נמצא חמצון שומנים גבוה יותר לאחר שתי דקות לעומת דקה אחת, ללא הבדל מובהק לעומת שלוש דקות. ההוצאה האנרגטית נשארה מעל רמת המנוחה. במהלך ההתאוששות נצפתה עלייה בחמצון השומנים לצד ירידה בחמצון הגלוקוז.";
+  assert.deepEqual(collapsedDirectionWarnings(sourceFindings, kept), []);
+  const dropped = collapsedDirectionWarnings(sourceFindings, "נמצאה תגובה מטבולית.");
+  assert.equal(dropped.some((warning) => warning.includes("upward")), true);
+  assert.equal(dropped.some((warning) => warning.includes("comparison target")), true);
+  assert.equal(dropped.some((warning) => warning.includes("non-significant")), true);
+  assert.equal(dropped.some((warning) => warning.includes("above")), true);
+  const flattened = collapsedDirectionWarnings(
+    sourceFindings,
+    "במהלך המאמץ נמצא חמצון שומנים גבוה יותר לעומת דקה אחת, ללא הבדל מובהק, וההוצאה האנרגטית נשארה מעל המנוחה. חמצון השומנים והגלוקוז השתנו.",
+  );
+  assert.equal(flattened.some((warning) => warning.includes("השתנה")), true);
+  assert.equal(
+    collapsedDirectionWarnings(
+      "Fat oxidation increased whereas glucose oxidation decreased during recovery.",
+      "במהלך ההתאוששות השתנו גם חמצון השומנים וחמצון הגלוקוז.",
     ).some((warning) => warning.includes("השתנה")),
     true,
   );
-  assert.deepEqual(collapsedDirectionWarnings(collapsedSource, recoveryDirection), []);
+  assert.deepEqual(
+    collapsedDirectionWarnings(
+      "Fat oxidation increased whereas glucose oxidation decreased during recovery.",
+      "במהלך ההתאוששות נצפתה עלייה בחמצון השומנים לצד ירידה בחמצון הגלוקוז.",
+    ),
+    [],
+  );
   assert.deepEqual(
     collapsedDirectionWarnings(
       "The schedule was updated between visits.",
