@@ -138,6 +138,37 @@ function articleRules(): string {
   ].join("\n");
 }
 
+export function buildRefinementInstructions(): string {
+  return [
+    "You are correcting a Hebrew scientific localization that failed validation.",
+    "Revise only the Hebrew fields in the response schema.",
+    "The Hebrew translation below failed the validation checks in the input.",
+    "Use the original English for those fields and the current Hebrew.",
+    "Preserve all facts, uncertainty, comparison direction, statistical meaning, numbers, units, and terminology.",
+    "Keep the difference between an observational association and an intervention contrast.",
+    "Do not introduce information that is absent from the English source.",
+    "Do not translate journal names, paper titles, author names, DOIs, or URLs.",
+    "Do not add a magnitude, a p-value, or a direction the English does not support.",
+    "Return only the requested fields.",
+  ].join("\n");
+}
+
+export function buildRefinementInput(input: {
+  originalEnglish: Record<string, unknown>;
+  currentHebrew: Record<string, unknown>;
+  warnings: readonly string[];
+}): string {
+  return JSON.stringify(
+    {
+      originalEnglish: input.originalEnglish,
+      currentHebrew: input.currentHebrew,
+      validationIssues: input.warnings,
+    },
+    null,
+    2,
+  );
+}
+
 function preservedContext(source: EnglishDocument): Record<string, unknown> {
   const shared = {
     language: "en",

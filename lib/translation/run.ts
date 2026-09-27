@@ -1,4 +1,5 @@
 import { buildHebrewDraft, formatTranslationReport, matchingHebrewLink } from "./document";
+import { type FieldRepairRequest, type RefinementReport, refineTranslationOnce } from "./refine";
 import { TranslationValidationError } from "./schema";
 import type { EnglishDocument, HebrewDraft, HebrewLink, HebrewTranslation } from "./types";
 
@@ -16,6 +17,7 @@ export async function runHebrewTranslation(input: {
   sources: readonly EnglishDocument[];
   existing: readonly HebrewLink[];
   translate: (source: EnglishDocument) => Promise<HebrewTranslation>;
+  repair?: (request: FieldRepairRequest) => Promise<unknown>;
   writeDraft: (draft: HebrewDraft) => Promise<void>;
   now?: () => string;
   log?: (message: string) => void;
@@ -41,14 +43,35 @@ export async function runHebrewTranslation(input: {
     }
 
     try {
-      const translation = await input.translate(source);
+      const translatedAt = now();
+      let translation = await input.translate(source);
+      let refinement: RefinementReport = {
+        triggered: false,
+        warningsBefore: [],
+        repairedFields: [],
+        modelCallCompleted: false,
+        fieldsReturned: [],
+        warningsAfter: [],
+        resolvedWarnings: [],
+      };
+      if (input.repair) {
+        const repaired = await refineTranslationOnce({
+          source,
+          translation,
+          model: input.model,
+          translatedAt,
+          repair: input.repair,
+        });
+        translation = repaired.translation;
+        refinement = repaired.report;
+      }
       const draft = buildHebrewDraft({
         source,
         translation,
         model: input.model,
-        translatedAt: now(),
+        translatedAt,
       });
-      const report = formatTranslationReport(source, draft);
+      const report = formatTranslationReport(source, draft, input.repair ? refinement : undefined);
       summary.reports.push(report);
       log(report);
       if (input.dryRun) {

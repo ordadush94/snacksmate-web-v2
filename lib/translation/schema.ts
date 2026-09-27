@@ -2,6 +2,7 @@ import { portableTextSpans, researchSourceSpans } from "./segments";
 import type {
   ArticleTranslation,
   EnglishDocument,
+  HebrewTranslation,
   ResearchTranslation,
   SpanTranslation,
 } from "./types";
@@ -151,6 +152,113 @@ export const RESEARCH_TRANSLATION_JSON_SCHEMA = {
     },
   },
 } as const;
+
+const RESEARCH_REPAIR_FIELDS = [
+  "excerpt",
+  "seoTitle",
+  "seoDescription",
+  "population",
+  "duration",
+  "comparator",
+  "outcomes",
+  "intervention",
+  "mainFindings",
+  "practicalInterpretation",
+  "limitations",
+  "snacksmateRelevance",
+  "imageAlt",
+] as const;
+
+const ARTICLE_REPAIR_FIELDS = ["title", "excerpt", "seoTitle", "seoDescription", "body", "imageAlt"] as const;
+
+export function repairJsonSchema(
+  source: EnglishDocument,
+  fields: readonly string[],
+): Record<string, unknown> {
+  const repairable = new Set<string>(
+    source._type === "article" ? ARTICLE_REPAIR_FIELDS : RESEARCH_REPAIR_FIELDS,
+  );
+  const properties: Record<string, unknown> = {};
+  const schema = source._type === "article" ? ARTICLE_TRANSLATION_JSON_SCHEMA : RESEARCH_TRANSLATION_JSON_SCHEMA;
+  const sourceProperties = schema.properties as Record<string, unknown>;
+  for (const field of fields) {
+    if (!repairable.has(field) || !sourceProperties[field]) {
+      throw new TranslationValidationError(`Refusing to repair immutable or unknown field ${field}.`);
+    }
+    properties[field] = sourceProperties[field];
+  }
+  return {
+    type: "object",
+    additionalProperties: false,
+    required: [...fields],
+    properties,
+  };
+}
+
+export function parseFieldRepair(
+  source: EnglishDocument,
+  fields: readonly string[],
+  input: unknown,
+): Partial<HebrewTranslation> {
+  const record = parseJson(input);
+  const unexpected = Object.keys(record).filter((key) => !fields.includes(key));
+  if (unexpected.length > 0) {
+    throw new TranslationValidationError(
+      `Repair returned fields that were not requested: ${unexpected.join(", ")}.`,
+    );
+  }
+  for (const field of fields) {
+    if (!(field in record)) {
+      throw new TranslationValidationError(`Repair omitted ${field}.`);
+    }
+  }
+  const repaired: Record<string, unknown> = {};
+  for (const field of fields) {
+    repaired[field] = parseRepairField(source, field, record[field]);
+  }
+  return repaired as Partial<HebrewTranslation>;
+}
+
+function parseRepairField(source: EnglishDocument, field: string, value: unknown): unknown {
+  if (source._type === "article") {
+    if (field === "title" || field === "excerpt" || field === "seoTitle" || field === "seoDescription") {
+      return requiredHebrewString(value, field);
+    }
+    if (field === "body") {
+      return parseSpans(value, "body", portableTextSpans(source.body, "body").map((span) => span.id));
+    }
+    if (field === "imageAlt") return parseImageAlt(value, source);
+  }
+  if (source._type === "research") {
+    if (field === "excerpt" || field === "seoDescription") return requiredHebrewString(value, field);
+    if (field === "seoTitle") {
+      const seoTitle = requiredHebrewString(value, field);
+      if (seoTitle.trim() === source.title.trim()) {
+        throw new TranslationValidationError(
+          "seoTitle repeated the English scientific title. Write a Hebrew reader-facing title instead.",
+        );
+      }
+      return seoTitle;
+    }
+    if (field === "population") return optionalLocalizedString(value, field, source.population);
+    if (field === "duration") return optionalLocalizedString(value, field, source.duration);
+    if (field === "comparator") return optionalLocalizedString(value, field, source.comparator);
+    if (field === "imageAlt") return parseImageAlt(value, source);
+    const spanFields = [
+      "outcomes",
+      "intervention",
+      "mainFindings",
+      "practicalInterpretation",
+      "limitations",
+      "snacksmateRelevance",
+    ] as const;
+    if ((spanFields as readonly string[]).includes(field)) {
+      const spans = researchSourceSpans(source).filter((span) => span.field === field);
+      return parseSpans(value, field, spans.map((span) => span.id));
+    }
+  }
+  throw new TranslationValidationError(`Refusing to repair immutable or unknown field ${field}.`);
+}
 
 export function parseTranslation(source: EnglishDocument, input: unknown): ArticleTranslation | ResearchTranslation {
   const value = parseJson(input);

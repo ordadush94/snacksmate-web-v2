@@ -171,7 +171,14 @@ const NON_SIG_HEBREW =
 const ABOVE_HEBREW = /מעל/;
 const BELOW_HEBREW = /מתחת/;
 const GENERIC_HEBREW_CHANGE = /(?<![\u05D0-\u05EA])השתנ(?:תה|ה|ו)(?![\u05D0-\u05EA])/;
-const HEBREW_DIRECTION = /עלייה|ירידה|עלה|עלו|ירד|ירדו|גבוה|נמוך|יותר|פחות|מעל|מתחת/;
+const HEBREW_DIRECTION = /עלייה|ירידה|עלה|עלו|ירד|ירדו|גבוה|נמוך|פחות/;
+
+function hebrewClauses(text: string): string[] {
+  return text
+    .split(/[.!?;\n]+|,(?=\s)|(?<=\s)(?=ו)/)
+    .map((clause) => clause.trim())
+    .filter(Boolean);
+}
 
 function hasAffirmativeSignificance(hebrew: string): boolean {
   const negation =
@@ -216,8 +223,8 @@ export function collapsedDirectionWarnings(sourceText: string, hebrew: string): 
     warnings.push("Hebrew dropped a result that was below a reference level. Keep מתחת.");
   }
   if (upward || downward) {
-    const vague = hebrew.split(/[.!?]/).filter((sentence) => {
-      return GENERIC_HEBREW_CHANGE.test(sentence) && !HEBREW_DIRECTION.test(sentence);
+    const vague = hebrewClauses(hebrew).filter((clause) => {
+      return GENERIC_HEBREW_CHANGE.test(clause) && !HEBREW_DIRECTION.test(clause);
     });
     if (vague.length > 0) {
       warnings.push(
@@ -270,8 +277,11 @@ export function seoComparisonWarnings(sourceText: string, seoDescription: string
     /\b(?:greater|higher|increased|more)\b/i.test(sourceText) &&
     /\b(?:compared with|than|versus)\b/i.test(sourceText);
   if (!comparison || !seoDescription.trim()) return [];
-  const claimsHigher = /גבוה יותר|נמוך יותר|עלייה|ירידה/.test(seoDescription);
-  if (claimsHigher && !/לעומת|מאשר/.test(seoDescription)) {
+  const clauses = hebrewClauses(seoDescription);
+  const claimsHigher = (clauses.length > 0 ? clauses : [seoDescription]).some((clause) => {
+    return /גבוה יותר|נמוך יותר|עלייה|ירידה/.test(clause) && !/לעומת|מאשר/.test(clause);
+  });
+  if (claimsHigher) {
     return [
       "SEO description states a higher result without saying higher than what. Include the comparison, for example ערך גבוה יותר של מדד A לעומת מצב A.",
     ];
