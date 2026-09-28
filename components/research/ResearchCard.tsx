@@ -5,6 +5,7 @@ import {
   researchTopicLabel,
   studyDesignLabel,
 } from "@/content/research";
+import { researchReaderTitle } from "@/lib/research-display";
 import {
   researchImageAlt,
   researchImageUrl,
@@ -20,6 +21,7 @@ type ResearchCardProps = {
 export function ResearchCard({ item, locale }: ResearchCardProps) {
   const copy = getResearchCopy(locale);
   const href = researchItemPath(locale, item.slug);
+  const title = researchReaderTitle(item);
   const topic = researchTopicLabel(item.topic, locale);
   const design = studyDesignLabel(item.studyDesign, locale);
   const imageUrl = researchImageUrl(item.mainImage, 960, 540);
@@ -34,7 +36,7 @@ export function ResearchCard({ item, locale }: ResearchCardProps) {
   return (
     <ContentCard
       href={href}
-      title={item.title}
+      title={title}
       linkLabel={copy.readResearch}
       takeaway={item.excerpt}
       chips={[topic, design].filter((chip): chip is string => Boolean(chip))}
@@ -42,7 +44,7 @@ export function ResearchCard({ item, locale }: ResearchCardProps) {
         imageUrl
           ? {
               src: imageUrl,
-              alt: researchImageAlt(item.mainImage, item.title),
+              alt: researchImageAlt(item.mainImage, title),
               width: 960,
               height: 540,
             }

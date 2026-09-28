@@ -6,7 +6,11 @@ import { GoogleAnalytics } from "@/components/GoogleAnalytics";
 import { createLocaleMetadata } from "@/lib/metadata";
 import "../globals.css";
 
-export const dynamicParams = false;
+// Keep this true. Next.js applies a parent `dynamicParams = false` to every
+// child segment, so a Research or Article slug published after the build
+// would 404 even when that page opts into on-demand rendering. Unknown
+// locales still 404 via the locale check below.
+export const dynamicParams = true;
 
 export function generateStaticParams() {
   return locales.map((lang) => ({ lang }));

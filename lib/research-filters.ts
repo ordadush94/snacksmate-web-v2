@@ -1,5 +1,6 @@
 export type ResearchFilterable = {
   title?: string;
+  seoTitle?: string | null;
   excerpt?: string;
   journal?: string;
   topic?: string;
@@ -28,7 +29,7 @@ export function filterResearchItems<T extends ResearchFilterable>(
     if (filters.year && String(item.year ?? "") !== filters.year) return false;
     if (!query) return true;
 
-    const haystack = [item.title, item.excerpt, item.journal]
+    const haystack = [item.seoTitle, item.title, item.excerpt, item.journal]
       .filter(Boolean)
       .join(" ")
       .toLowerCase();
