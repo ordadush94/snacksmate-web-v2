@@ -319,6 +319,27 @@ test("a recent strong study still ranks above an older less relevant highly cite
   assert.match(ranking.ranked[0]?.reason ?? "", /Highly relevant randomized controlled trial; 2025; 12 citations/);
 });
 
+test("a qualitative paper is not scored as a randomized trial from a parent publication type", () => {
+  const ranking = rankResearchCandidates({
+    currentYear: CURRENT_YEAR,
+    limit: 30,
+    existing: [],
+    studies: [
+      study({
+        pmid: "40",
+        title:
+          "Health professionals' experiences of Snacktivity in routine consultations: a qualitative study",
+        publicationTypes: ["Journal Article", "Randomized Controlled Trial"],
+        year: 2024,
+        citationCount: 3,
+        citationSource: "crossref",
+      }),
+    ],
+  });
+  assert.equal(ranking.ranked[0]?.designLabel, "qualitative study");
+  assert.equal(ranking.ranked[0]?.designScore, 36);
+});
+
 test("recency does not outrank stronger study design", () => {
   const ranking = rankResearchCandidates({
     currentYear: CURRENT_YEAR,

@@ -115,6 +115,12 @@ export function classifyEvidenceDesign(input: {
   if (meta) return design("meta-analysis", "meta-analysis");
   if (systematic) return design("systematic-review", "systematic review");
 
+  // PubMed often tags a qualitative paper with the parent trial's publication type.
+  // The paper's own title is the design signal in that case.
+  if (/\bqualitative\s+(?:study|studies|research)\b/i.test(title)) {
+    return { id: "other", label: "qualitative study", designScore: DESIGN_SCORES.other };
+  }
+
   if (
     fromTitle === "randomized-controlled-trial" ||
     fromTypes === "randomized-controlled-trial" ||
