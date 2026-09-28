@@ -13,6 +13,7 @@ import {
   articleJsonLd,
   breadcrumbJsonLd,
 } from "@/lib/article-seo";
+import { researchReaderTitle } from "@/lib/research-display";
 import { absoluteUrl } from "@/lib/site";
 import {
   articleImageAlt,
@@ -215,7 +216,7 @@ export function ArticleDetail({
                 {relatedResearch.map((item) => (
                   <li key={item._id}>
                     <Link href={researchItemPath(locale, item.slug)}>
-                      {item.title}
+                      {researchReaderTitle(item)}
                     </Link>
                   </li>
                 ))}

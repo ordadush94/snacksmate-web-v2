@@ -16,7 +16,11 @@ import {
   researchPageJsonLd,
   scholarlyArticleJsonLd,
 } from "@/lib/research-seo";
-import { formatOutcomeList, stripEditorialLabels } from "@/lib/research-display";
+import {
+  formatOutcomeList,
+  researchReaderTitle,
+  stripEditorialLabels,
+} from "@/lib/research-display";
 import { absoluteUrl } from "@/lib/site";
 import {
   researchImageAlt,
@@ -68,7 +72,7 @@ export function ResearchDetail({
   const researchUrl = absoluteUrl(researchPath(locale));
   const description =
     research.excerpt?.trim() || research.seoDescription?.trim();
-  const displayTitle = research.seoTitle?.trim() || research.title;
+  const displayTitle = researchReaderTitle(research);
   const authors = research.studyAuthors?.map((name) => name.trim()).filter(Boolean);
   const outcomes = research.outcomes?.map((item) => item.trim()).filter(Boolean);
   const journal = textValue(research.journal);
@@ -356,7 +360,7 @@ export function ResearchDetail({
                       <p className="section-kicker">{itemTopic}</p>
                     ) : null}
                     <Link href={researchItemPath(locale, item.slug)}>
-                      {item.title}
+                      {researchReaderTitle(item)}
                     </Link>
                     {itemMeta ? <span>{itemMeta}</span> : null}
                   </li>

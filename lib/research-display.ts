@@ -40,6 +40,14 @@ export function stripEditorialLabels(
   });
 }
 
+export function researchReaderTitle(item: {
+  title: string;
+  seoTitle?: string | null;
+}) {
+  const seoTitle = item.seoTitle?.trim();
+  return seoTitle || item.title;
+}
+
 export function formatOutcomeList(outcomes: string[]) {
   return outcomes
     .map((outcome) => outcome.trim())
