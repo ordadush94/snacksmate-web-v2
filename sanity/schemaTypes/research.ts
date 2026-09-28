@@ -11,6 +11,7 @@ import {
   EDITORIAL_STATUS_OPTIONS,
   researchPreviewSubtitle,
 } from '../../lib/research-editorial/status'
+import {isUniqueSlugForLanguage} from '../lib/uniqueSlug'
 
 const LANGUAGE_OPTIONS = [
   {title: 'English', value: 'en'},
@@ -153,6 +154,7 @@ export const researchType = defineType({
       options: {
         source: 'title',
         maxLength: 96,
+        isUnique: isUniqueSlugForLanguage,
       },
       validation: (rule) => rule.required(),
     }),

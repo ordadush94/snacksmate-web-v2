@@ -1,6 +1,8 @@
 import {DocumentTextIcon} from '@sanity/icons'
 import {defineArrayMember, defineField, defineType} from 'sanity'
 
+import {isUniqueSlugForLanguage} from '../lib/uniqueSlug'
+
 const LANGUAGE_OPTIONS = [
   {title: 'Hebrew', value: 'he'},
   {title: 'English', value: 'en'},
@@ -41,6 +43,7 @@ export const articleType = defineType({
       options: {
         source: 'title',
         maxLength: 96,
+        isUnique: isUniqueSlugForLanguage,
       },
       validation: (rule) => rule.required(),
     }),
