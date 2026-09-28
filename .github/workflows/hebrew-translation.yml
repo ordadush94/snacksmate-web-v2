@@ -27,10 +27,6 @@ on:
         description: Dry run only. Leave this checked. Uncheck only to create Hebrew Sanity drafts. This never publishes.
         type: boolean
         default: true
-      slug_check:
-        description: Run the locale slug query and deploy the existing Studio. Leave this unchecked for translation.
-        type: boolean
-        default: false
       limit:
         description: Maximum missing documents to localize. Default 5. The script refuses more than 25.
         type: string
@@ -72,14 +68,7 @@ jobs:
           TRANSLATE_LIMIT: ${{ github.event.inputs.limit || '5' }}
           # True only when a manual run explicitly turns dry-run off.
           WRITE_DRAFTS: ${{ github.event.inputs.dry_run == false || github.event.inputs.dry_run == 'false' }}
-          SLUG_CHECK: ${{ github.event.inputs.slug_check == true || github.event.inputs.slug_check == 'true' }}
         run: |
-          if [ "$SLUG_CHECK" = "true" ]; then
-            echo "Locale slug query, then deploy the existing hosted Studio. No content will be published."
-            npx tsx scripts/check-locale-slug.ts
-            SANITY_AUTH_TOKEN="$SANITY_WRITE_TOKEN" npx sanity deploy --yes
-            exit 0
-          fi
           echo "Hebrew translation is manual. It does not publish drafts."
           if [ -n "$DOCUMENT_ID" ] && [ "$MISSING" = "true" ]; then
             echo "Provide a document id or missing translations, not both."
