@@ -6,7 +6,11 @@ import { evaluate, parse } from "groq-js";
 
 import { articleType } from "../schemaTypes/article";
 import { researchType } from "../schemaTypes/research";
-import { isUniqueSlugForLanguage, localeSlugUniquenessQuery } from "./uniqueSlug";
+import {
+  isUniqueSlugForLanguage,
+  localeSlugDocumentIds,
+  localeSlugUniquenessQuery,
+} from "./uniqueSlug";
 
 const ENGLISH_RESEARCH_SLUG =
   "a-two-minute-exercise-snack-may-be-sufficient-to-enhance-energy-metabolism-and-fat-oxidation-in";
@@ -134,7 +138,17 @@ test("Article and Research share one locale-aware slug check", () => {
   assert.match(localeSlugUniquenessQuery, /_type == \$type/);
   assert.match(localeSlugUniquenessQuery, /language == \$language/);
   assert.match(localeSlugUniquenessQuery, /slug\.current == \$slug/);
-  assert.match(localeSlugUniquenessQuery, /!sanity::versionOf\(\$publishedId\)/);
+  assert.match(localeSlugUniquenessQuery, /!\(_id in \[\$publishedId, \$draftId\]\)/);
+  assert.match(localeSlugUniquenessQuery, /count\(\*\[/);
+  assert.equal(localeSlugUniquenessQuery.includes("sanity::versionOf"), false);
+  assert.deepEqual(localeSlugDocumentIds(hebrewResearchDraft._id), {
+    publishedId: "research-he-research-pubmed-42798426",
+    draftId: "drafts.research-he-research-pubmed-42798426",
+  });
+  assert.deepEqual(localeSlugDocumentIds("research-he-research-pubmed-42798426"), {
+    publishedId: "research-he-research-pubmed-42798426",
+    draftId: "drafts.research-he-research-pubmed-42798426",
+  });
 });
 
 test("the published English research and its Hebrew translation can share a slug", async () => {
@@ -227,16 +241,15 @@ test("Article slugs follow the same language rule", async () => {
   );
 });
 
-test("editing a document ignores its draft, published, and release versions", async () => {
+test("editing a document ignores its published id and its drafts id", async () => {
   const publishedId = "research-he-research-pubmed-42798426";
   const dataset = [
     publishedEnglishResearch,
     document(publishedId, "research", "he", ENGLISH_RESEARCH_SLUG),
     document(`drafts.${publishedId}`, "research", "he", ENGLISH_RESEARCH_SLUG),
-    document(`versions.summer-review.${publishedId}`, "research", "he", ENGLISH_RESEARCH_SLUG),
   ];
 
-  for (const id of [publishedId, `drafts.${publishedId}`, `versions.summer-review.${publishedId}`]) {
+  for (const id of [publishedId, `drafts.${publishedId}`]) {
     assert.equal(
       await slugIsUnique(
         dataset,
@@ -282,6 +295,7 @@ test("the uniqueness query reads language, type, and the published document id",
     language: "he",
     slug: ENGLISH_RESEARCH_SLUG,
     publishedId: "research-he-research-pubmed-42798426",
+    draftId: "drafts.research-he-research-pubmed-42798426",
   });
 });
 

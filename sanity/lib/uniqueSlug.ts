@@ -1,5 +1,4 @@
 import type { SanityDocument, SlugIsUniqueValidator } from "@sanity/types";
-import { getPublishedId } from "sanity";
 
 /** Matches the Studio client API version used by Sanity's own slug check. */
 const SLUG_VALIDATION_API_VERSION = "2025-02-19";
@@ -7,15 +6,28 @@ const SLUG_VALIDATION_API_VERSION = "2025-02-19";
 /**
  * A slug is unique among documents of the same type and language.
  * English and Hebrew can share a slug because public routes include the locale.
- * `sanity::versionOf` excludes the document being edited, including its draft,
- * published document, and release versions.
+ * The current document is excluded in both its published id and drafts.* id.
+ *
+ * Studio calls this callback instead of the default per-type slug check.
+ * Do not add a second slug uniqueness rule on the field.
  */
-export const localeSlugUniquenessQuery = `!defined(*[
-  _type == $type &&
+export const localeSlugMatchFilter = `_type == $type &&
   language == $language &&
   slug.current == $slug &&
-  !sanity::versionOf($publishedId)
-][0]._id)`;
+  !(_id in [$publishedId, $draftId])`;
+
+export const localeSlugUniquenessQuery = `count(*[${localeSlugMatchFilter}]) == 0`;
+
+export function localeSlugDocumentIds(documentId: string): {
+  publishedId: string;
+  draftId: string;
+} {
+  const publishedId = documentId.replace(/^drafts\./, "");
+  return {
+    publishedId,
+    draftId: `drafts.${publishedId}`,
+  };
+}
 
 function documentLanguage(document: SanityDocument | undefined): string | undefined {
   const language = document?.language;
@@ -32,6 +44,7 @@ export const isUniqueSlugForLanguage: SlugIsUniqueValidator = async (slug, conte
 
   if (!slug || !type || !id || !language) return true;
 
+  const { publishedId, draftId } = localeSlugDocumentIds(id);
   const isUnique = await getClient({ apiVersion: SLUG_VALIDATION_API_VERSION })
     .withConfig({ perspective: "raw" })
     .fetch<boolean>(
@@ -40,7 +53,8 @@ export const isUniqueSlugForLanguage: SlugIsUniqueValidator = async (slug, conte
         type,
         language,
         slug,
-        publishedId: getPublishedId(id),
+        publishedId,
+        draftId,
       },
       { tag: "validation.slug-is-unique-per-language" },
     );
