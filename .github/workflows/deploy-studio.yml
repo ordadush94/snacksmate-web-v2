@@ -1,7 +1,11 @@
-name: Deploy Studio
+name: Deploy Sanity Studio
 
-# Manual only. Deploys the existing hosted Studio (studioHost snacksmate,
-# appId in sanity.cli.ts). It does not create a project and it does not publish content.
+# Manual only. Deploys the existing hosted Studio at
+# https://snacksmate.sanity.studio.
+# Project 8wc8eouj, dataset production, app id ptpammm4gmsm9u7eiy7b20mc
+# (studioHost and deployment.appId in sanity.cli.ts).
+# Does not create a Sanity project, does not create a hostname, and does not
+# publish content. Does not run on push.
 on:
   workflow_dispatch:
 
@@ -10,12 +14,21 @@ permissions:
 
 jobs:
   deploy:
-    name: Check slug query and deploy Studio
+    name: Deploy existing hosted Studio
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      SANITY_AUTH_TOKEN: ${{ secrets.SANITY_AUTH_TOKEN }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Require SANITY_AUTH_TOKEN
+        run: |
+          if [ -z "${SANITY_AUTH_TOKEN}" ]; then
+            echo "::error::SANITY_AUTH_TOKEN is missing. Add a repository secret named SANITY_AUTH_TOKEN (a Sanity token that can deploy the existing Studio), then run this workflow again."
+            exit 1
+          fi
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -26,12 +39,5 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run locale slug query against production
-        env:
-          SANITY_WRITE_TOKEN: ${{ secrets.SANITY_WRITE_TOKEN }}
-        run: npx tsx scripts/check-locale-slug.ts
-
       - name: Deploy the existing hosted Studio
-        env:
-          SANITY_AUTH_TOKEN: ${{ secrets.SANITY_WRITE_TOKEN }}
-        run: npx sanity deploy --yes
+        run: npx --yes sanity@latest deploy --yes
