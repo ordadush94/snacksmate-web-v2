@@ -397,6 +397,40 @@ test("deduplicates PMIDs, batches EFetch, and reuses cached records", async () =
   );
 });
 
+test("publication-date search leaves the recent lookback query unchanged", async () => {
+  const urls: string[] = [];
+  const client = createPubmedClient({
+    email: EMAIL,
+    lookbackDays: 14,
+    sleep: async () => {},
+    fetchImpl: async (input) => {
+      urls.push(String(input));
+      return esearchResponse(["111"]);
+    },
+  });
+
+  assert.deepEqual(await client.searchQuery("VILPA"), ["111"]);
+  const recent = new URL(urls[0]).searchParams;
+  assert.equal(recent.get("datetype"), "edat");
+  assert.equal(recent.get("reldate"), "14");
+  assert.equal(recent.get("mindate"), null);
+  assert.equal(recent.get("maxdate"), null);
+
+  const ranged = await client.searchPublishedBetween("VILPA", {
+    from: "2019-01-01",
+    to: "2026-09-28",
+  });
+  assert.deepEqual(ranged.ids, ["111"]);
+  assert.equal(ranged.total, 1);
+  assert.equal(ranged.truncated, false);
+  const historical = new URL(urls[1]).searchParams;
+  assert.equal(historical.get("datetype"), "pdat");
+  assert.equal(historical.get("mindate"), "2019/01/01");
+  assert.equal(historical.get("maxdate"), "2026/09/28");
+  assert.equal(historical.get("reldate"), null);
+  assert.equal(historical.get("sort"), "pub_date");
+});
+
 test("a PubMed outage after retries does not create Sanity drafts", async () => {
   const originalFetch = globalThis.fetch;
   const externalCalls: string[] = [];

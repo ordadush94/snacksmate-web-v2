@@ -13,7 +13,10 @@ export const RESEARCH_IDENTIFIERS_QUERY = `*[_type == "research"]{
   pmid,
   doi,
   title,
-  "slug": slug.current
+  "slug": slug.current,
+  language,
+  translationSourceId,
+  translationSlug
 }`;
 
 export function createSanityWriteClient(input: {
@@ -33,7 +36,7 @@ export function createSanityWriteClient(input: {
 }
 
 export async function loadResearchIdentities(
-  client: SanityClient,
+  client: Pick<SanityClient, "fetch">,
 ): Promise<ResearchIdentity[]> {
   const rows = await client.fetch<ResearchIdentity[]>(RESEARCH_IDENTIFIERS_QUERY);
   return rows.filter((row) => row.id);
