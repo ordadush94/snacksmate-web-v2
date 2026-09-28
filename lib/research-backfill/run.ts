@@ -1,18 +1,16 @@
-import type { SanityClient } from "@sanity/client";
-
 import { RESEARCH_DISCOVERY_QUERIES, DEFAULT_RESEARCH_LOOKBACK_DAYS } from "../research-discovery/config";
 import { createCrossrefClient, enrichFromCrossref } from "../research-discovery/crossref";
 import { normalizeDoi } from "../research-discovery/normalize";
 import { createPubmedClient, type PubmedRecord } from "../research-discovery/pubmed";
 import { assessRelevance } from "../research-discovery/relevance";
 import { createSanityWriteClient, loadResearchIdentities } from "../research-discovery/sanity";
-import { rankResearchCandidates, type RankableStudy } from "./rank";
+import { rankResearchCandidates, type BackfillRanking, type RankableStudy } from "./rank";
 
 const WRITE_DISABLED =
   "Research backfill writing is not implemented. This phase is dry-run only and makes zero Sanity mutations.";
 
 export type SanityReadClient = {
-  fetch: SanityClient["fetch"];
+  fetch: (query: string, params?: Record<string, unknown>) => Promise<unknown>;
 };
 
 export type BackfillRunConfig = {

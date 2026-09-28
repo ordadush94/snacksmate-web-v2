@@ -36,10 +36,15 @@ export function createSanityWriteClient(input: {
 }
 
 export async function loadResearchIdentities(
-  client: Pick<SanityClient, "fetch">,
+  client: { fetch: (query: string) => Promise<unknown> },
 ): Promise<ResearchIdentity[]> {
-  const rows = await client.fetch<ResearchIdentity[]>(RESEARCH_IDENTIFIERS_QUERY);
-  return rows.filter((row) => row.id);
+  const rows = await client.fetch(RESEARCH_IDENTIFIERS_QUERY);
+  if (!Array.isArray(rows)) return [];
+  return rows.filter((row): row is ResearchIdentity => isResearchIdentity(row));
+}
+
+function isResearchIdentity(row: unknown): row is ResearchIdentity {
+  return Boolean(row && typeof row === "object" && "id" in row && typeof row.id === "string" && row.id);
 }
 
 export async function createResearchDraft(
