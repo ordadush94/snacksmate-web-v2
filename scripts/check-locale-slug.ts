@@ -92,7 +92,12 @@ async function main() {
   };
 
   console.log(JSON.stringify(report, null, 2));
+  if (token && !draft?._id) {
+    console.error("Authenticated query did not return the Hebrew draft.");
+    process.exitCode = 1;
+  }
   if (matches.length !== 0 || isUnique !== true) {
+    console.error("Locale slug query did not treat the Hebrew draft as unique.");
     process.exitCode = 1;
   }
 }
