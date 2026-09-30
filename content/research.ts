@@ -93,6 +93,8 @@ export const researchCopy = {
     homeLabel: "Home",
     breadcrumbLabel: "Breadcrumb",
     relatedHeading: "Related research",
+    relatedRead: "Read summary",
+    relatedAll: "All research",
     closingHeading: "What can you take from this?",
     closingNote:
       "The notes above are Snacksmate’s reading of this study, not personal advice.",
@@ -151,6 +153,8 @@ export const researchCopy = {
     homeLabel: "בית",
     breadcrumbLabel: "נתיב ניווט",
     relatedHeading: "מחקרים קשורים",
+    relatedRead: "לסיכום המחקר",
+    relatedAll: "לכל המחקרים",
     closingHeading: "מה אפשר לקחת מהמחקר?",
     closingNote:
       "ההערות למעלה הן הקריאה של Snacksmate את המחקר, לא עצה אישית.",
