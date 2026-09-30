@@ -12,6 +12,11 @@ import {
 const EUTILS_ORIGIN = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils";
 const PAGE_SIZE = 200;
 const MAX_IDS_PER_QUERY = 400;
+/**
+ * Historical backfill can scan a multi-year publication window.
+ * Recent discovery keeps the smaller cap above.
+ */
+export const PUBMED_DATE_RANGE_MAX_IDS = 2000;
 /** NCBI accepts large EFetch id lists; 200 stays within a normal GET URL. */
 const FETCH_BATCH_SIZE = 200;
 /**
@@ -109,6 +114,43 @@ export function createPubmedClient(options: PubmedClientOptions) {
   }
 
   async function searchQuery(term: string): Promise<string[]> {
+    const result = await searchIds(
+      term,
+      {
+        datetype: "edat",
+        reldate: String(options.lookbackDays),
+      },
+      MAX_IDS_PER_QUERY,
+    );
+    return result.ids;
+  }
+
+  async function searchPublishedBetween(
+    term: string,
+    range: { from: string; to: string },
+    maxIds = PUBMED_DATE_RANGE_MAX_IDS,
+  ): Promise<PubmedDateSearch> {
+    const from = isoDateToPubmed(range.from, "from");
+    const to = isoDateToPubmed(range.to, "to");
+    if (range.from > range.to) {
+      throw new Error(`PubMed date range starts after it ends: ${range.from} > ${range.to}`);
+    }
+    return searchIds(
+      term,
+      {
+        datetype: "pdat",
+        mindate: from,
+        maxdate: to,
+      },
+      maxIds,
+    );
+  }
+
+  async function searchIds(
+    term: string,
+    dateParams: Record<string, string>,
+    maxIds: number,
+  ): Promise<PubmedDateSearch> {
     const ids: string[] = [];
     let retstart = 0;
     let total = 0;
@@ -120,9 +162,8 @@ export function createPubmedClient(options: PubmedClientOptions) {
         retmode: "json",
         retmax: String(PAGE_SIZE),
         retstart: String(retstart),
-        datetype: "edat",
-        reldate: String(options.lookbackDays),
         sort: "pub_date",
+        ...dateParams,
         ...identification(),
       });
       const url = `${EUTILS_ORIGIN}/esearch.fcgi?${params.toString()}`;
@@ -153,15 +194,20 @@ export function createPubmedClient(options: PubmedClientOptions) {
       ids.push(...(result.idlist ?? []).filter(Boolean));
       retstart += PAGE_SIZE;
 
-      if (ids.length >= MAX_IDS_PER_QUERY) {
-        console.warn(
-          `PubMed query truncated at ${MAX_IDS_PER_QUERY} records: ${term}`,
-        );
+      if (ids.length >= maxIds) {
+        if (total > maxIds) {
+          console.warn(`PubMed query truncated at ${maxIds} records: ${term}`);
+        }
         break;
       }
     } while (retstart < total);
 
-    return uniquePmids(ids).slice(0, MAX_IDS_PER_QUERY);
+    const unique = uniquePmids(ids).slice(0, maxIds);
+    return {
+      ids: unique,
+      total,
+      truncated: total > unique.length,
+    };
   }
 
   async function fetchRecords(pmids: string[]): Promise<{
@@ -198,7 +244,24 @@ export function createPubmedClient(options: PubmedClientOptions) {
     return { records, errors };
   }
 
-  return { searchQuery, fetchRecords };
+  return { searchQuery, searchPublishedBetween, fetchRecords };
+}
+
+export type PubmedDateSearch = {
+  ids: string[];
+  total: number;
+  truncated: boolean;
+};
+
+function isoDateToPubmed(value: string, label: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new Error(`${label} must be YYYY-MM-DD. Received: ${value}`);
+  }
+  const parsed = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+    throw new Error(`${label} is not a real calendar date. Received: ${value}`);
+  }
+  return value.replace(/-/g, "/");
 }
 
 export async function getText(

@@ -3,6 +3,7 @@
  *
  * Edit this list to change what PubMed is asked for.
  * Ingestion logic reads the list; it does not hardcode these phrases.
+ * Historical backfill uses this same list with a longer publication-date window.
  *
  * Terms are PubMed query syntax. Quoted strings are phrase searches.
  */

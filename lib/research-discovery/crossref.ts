@@ -1,6 +1,8 @@
 import { normalizeDoi } from "./normalize";
 import { publicationDate, publicationYear } from "./study-metadata";
 
+export type CitationSource = "crossref";
+
 export type CrossrefMetadata = {
   doi?: string;
   title?: string;
@@ -8,6 +10,9 @@ export type CrossrefMetadata = {
   authors: string[];
   year?: number;
   publishedAt?: string;
+  /** Present only when Crossref returned is-referenced-by-count. */
+  citationCount?: number;
+  citationSource?: CitationSource;
 };
 
 type CrossrefMessage = {
@@ -19,6 +24,7 @@ type CrossrefMessage = {
   published?: { "date-parts"?: number[][] };
   "published-online"?: { "date-parts"?: number[][] };
   "published-print"?: { "date-parts"?: number[][] };
+  "is-referenced-by-count"?: number;
 };
 
 export type CrossrefClientOptions = {
@@ -99,6 +105,8 @@ function mapMessage(message: CrossrefMessage): CrossrefMetadata {
     message["published-print"]?.["date-parts"]?.[0];
   const [year, month, day] = dateParts ?? [];
 
+  const citationCount = readCitationCount(message["is-referenced-by-count"]);
+
   return {
     doi: normalizeDoi(message.DOI) ?? undefined,
     title: firstText(message.title),
@@ -111,7 +119,15 @@ function mapMessage(message: CrossrefMessage): CrossrefMetadata {
       .filter(Boolean),
     year: publicationYear({ year }),
     publishedAt: publicationDate({ year, month, day }),
+    ...(citationCount === undefined
+      ? {}
+      : { citationCount, citationSource: "crossref" as const }),
   };
+}
+
+function readCitationCount(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return undefined;
+  return Math.round(value);
 }
 
 function firstText(values: string[] | undefined): string | undefined {

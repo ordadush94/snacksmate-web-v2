@@ -6,6 +6,9 @@ export type ResearchIdentity = {
   doi?: string | null;
   title?: string | null;
   slug?: string | null;
+  language?: string | null;
+  translationSourceId?: string | null;
+  translationSlug?: string | null;
 };
 
 export type DuplicateMatch = {
