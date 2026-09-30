@@ -12,11 +12,15 @@ import { HowItWorks } from "@/components/landing/HowItWorks";
 import { Benefits } from "@/components/landing/Benefits";
 import { Trust } from "@/components/landing/Trust";
 import { DownloadCta } from "@/components/landing/DownloadCta";
+import { HomeArticles } from "@/components/landing/HomeArticles";
 import { SiteFooter } from "@/components/landing/SiteFooter";
+import type { HomeArticle, HomeStudy } from "@/components/landing/home-content";
 import { researchPath } from "@/content/research";
 
 type LandingPageProps = {
   content: LandingContent;
+  studies: HomeStudy[];
+  articles: HomeArticle[];
 };
 
 function smScroll(id: string, evt?: Event) {
@@ -107,7 +111,7 @@ function useLandingBehavior(locale: Locale) {
   }, [locale]);
 }
 
-export function LandingPage({ content }: LandingPageProps) {
+export function LandingPage({ content, studies, articles }: LandingPageProps) {
   useLandingBehavior(content.locale);
 
   return (
@@ -119,18 +123,25 @@ export function LandingPage({ content }: LandingPageProps) {
         menuLabel={content.nav.menuLabel}
         closeMenuLabel={content.nav.closeMenuLabel}
       />
-      <main id="sm-top">
+      <main className="landing" id="sm-top">
         <Hero content={content} />
         <Problem content={content.problem} />
         <Concept content={content.concept} />
-        <Effects
-          content={content.effects}
-          researchHref={researchPath(content.locale)}
-        />
         <HowItWorks content={content.howItWorks} />
         <Benefits content={content.benefits} />
         <Trust content={content.trust} />
         <DownloadCta content={content.download} store={content.store} />
+        <Effects
+          content={content.effects}
+          researchHref={researchPath(content.locale)}
+          studies={studies}
+        />
+        <HomeArticles
+          locale={content.locale}
+          heading={content.support.articlesHeading}
+          moreLabel={content.support.articlesMore}
+          articles={articles}
+        />
       </main>
       <SiteFooter content={content.footer} locale={content.locale} />
     </>

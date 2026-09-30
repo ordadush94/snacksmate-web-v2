@@ -1,7 +1,13 @@
 import type { LandingContent } from "@/content/types";
-import { APP_ICON_SRC } from "@/lib/site";
 import { BrandMark } from "@/components/landing/BrandMark";
+import { DeviceFrame } from "@/components/landing/DeviceFrame";
 import { StoreButtons } from "@/components/landing/StoreButtons";
+
+const HERO_SCREEN = {
+  src: "/screens/choose.webp",
+  width: 540,
+  height: 1105,
+};
 
 type HeroProps = {
   content: LandingContent;
@@ -19,20 +25,19 @@ export function Hero({ content }: HeroProps) {
             <a className="btn btn-primary" href="#sm-download" data-sm-scroll="sm-download">
               {content.hero.downloadCta}
             </a>
-            <a className="btn btn-ghost" href="#sm-what" data-sm-scroll="sm-what">
+            <a className="btn-text" href="#sm-what" data-sm-scroll="sm-what">
               {content.hero.conceptCta}
             </a>
           </div>
-          <StoreButtons store={content.store} />
+          <StoreButtons store={content.store} tone="quiet" />
         </div>
-        <div className="hero-visual" aria-hidden="true">
-          <div className="orb" />
-          <img
-            className="mascot"
-            src={APP_ICON_SRC}
-            width={220}
-            height={220}
-            alt=""
+        <div className="hero-visual">
+          <DeviceFrame
+            src={HERO_SCREEN.src}
+            alt={content.support.screenAlt}
+            width={HERO_SCREEN.width}
+            height={HERO_SCREEN.height}
+            priority
           />
         </div>
       </div>

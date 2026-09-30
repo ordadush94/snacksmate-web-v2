@@ -97,5 +97,10 @@ export type LandingContent = {
     downloadLabel: string;
     navLabel: string;
   };
+  support: {
+    articlesHeading: string;
+    articlesMore: string;
+    screenAlt: string;
+  };
   store: StoreLinks;
 };

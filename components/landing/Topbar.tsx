@@ -99,10 +99,10 @@ export function Topbar({
             >
               {researchLabel}
             </Link>
-            <a className="btn btn-primary topbar-download" href={downloadHref}>
-              {downloadLabel}
-            </a>
           </nav>
+          <a className="btn btn-primary topbar-download" href={downloadHref}>
+            {downloadLabel}
+          </a>
           <LanguageSwitch
             locale={locale}
             ariaLabel={languageAria}

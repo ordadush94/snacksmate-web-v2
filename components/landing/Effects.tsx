@@ -1,9 +1,11 @@
 import type { LandingContent } from "@/content/types";
+import type { HomeStudy } from "@/components/landing/home-content";
 import { Reveal } from "@/components/landing/Reveal";
 
 type EffectsProps = {
   content: LandingContent["effects"];
   researchHref: string;
+  studies: HomeStudy[];
 };
 
 function CheckIcon() {
@@ -21,7 +23,7 @@ function CheckIcon() {
   );
 }
 
-export function Effects({ content, researchHref }: EffectsProps) {
+export function Effects({ content, researchHref, studies }: EffectsProps) {
   return (
     <section id="sm-effects">
       <div className="wrap">
@@ -40,8 +42,19 @@ export function Effects({ content, researchHref }: EffectsProps) {
             </li>
           ))}
         </ul>
+        {studies.length > 0 ? (
+          <ul className="evidence-list">
+            {studies.map((study) => (
+              <li key={study.id}>
+                <a href={study.href}>{study.title}</a>
+                {study.excerpt ? <p className="evidence-excerpt">{study.excerpt}</p> : null}
+                {study.meta ? <p className="evidence-meta">{study.meta}</p> : null}
+              </li>
+            ))}
+          </ul>
+        ) : null}
         <Reveal as="div" className="effects-more">
-          <a className="text-link" href={researchHref}>
+          <a className="btn-text" href={researchHref}>
             {content.researchLink}
           </a>
         </Reveal>
