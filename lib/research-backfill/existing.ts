@@ -59,6 +59,34 @@ export function publishedDocumentId(id: string | null | undefined): string {
   return value.startsWith("drafts.") ? value.slice("drafts.".length) : value;
 }
 
+/**
+ * A Hebrew (or other) document can point at an English draft through
+ * translationSourceId or translationSlug without sharing PMID, DOI, or title.
+ * The write path checks this immediately before create. Ranking is unchanged.
+ */
+export function matchLinkedTranslation(
+  candidate: { draftId: string; slug?: string | null },
+  existing: readonly ResearchIdentity[],
+): { matchedDocumentId: string } | null {
+  const draftId = candidate.draftId.trim();
+  if (!draftId) return null;
+  const publishedId = publishedDocumentId(draftId);
+  const slug = candidate.slug?.trim() ?? "";
+
+  for (const item of existing) {
+    const source = publishedDocumentId(item.translationSourceId);
+    if (source && (source === publishedId || source === draftId)) {
+      return { matchedDocumentId: item.id };
+    }
+    const translationSlug = item.translationSlug?.trim() ?? "";
+    if (slug && translationSlug && translationSlug === slug) {
+      return { matchedDocumentId: item.id };
+    }
+  }
+
+  return null;
+}
+
 function studyGroup(seedId: string, existing: readonly ResearchIdentity[]): ResearchIdentity[] {
   const seed = existing.find((item) => item.id === seedId);
   if (!seed) return [];

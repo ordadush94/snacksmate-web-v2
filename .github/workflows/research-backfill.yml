@@ -1,34 +1,45 @@
 name: Research Backfill
 
-# SAFETY: manual historical ranking only. There is no schedule.
-# This phase is dry-run only. The workflow refuses a run when dryRun is false.
-# It never creates, edits, or publishes Sanity documents.
+# SAFETY: manual only. There is no schedule.
+# Dry-run is the default and performs zero Sanity mutations.
+# A write is possible only when dryRun is false AND confirmWrite is CREATE DRAFTS.
+# Writes create unpublished English drafts. This workflow never publishes.
 # The recurring Research Discovery workflow is unchanged.
 on:
   workflow_dispatch:
     inputs:
-      fromYear:
-        description: First publication year to search (YYYY). The search runs through today.
+      from:
+        description: First publication date (YYYY-MM-DD). The search runs through today.
         type: string
         required: false
-        default: "2019"
+        default: "2019-01-01"
       limit:
-        description: How many top candidates to rank. Default 30. Maximum 100.
+        description: Dry-run ranks this many candidates (max 100). A write creates this many new drafts (max 25). Default 10.
         type: string
         required: false
-        default: "30"
+        default: "10"
       dryRun:
-        description: Dry-run only. Locked true for this phase. This workflow never writes to Sanity.
+        description: Leave checked. Uncheck only to create unpublished English drafts. This never publishes.
         type: boolean
         required: false
         default: true
+      confirmWrite:
+        description: Required when dry-run is unchecked. Type CREATE DRAFTS to allow unpublished draft creation.
+        type: string
+        required: false
+        default: ""
+      enrich:
+        description: After a write, run the existing Research AI enrichment on the new drafts only. Leave unchecked. Never publishes. A failure does not delete drafts.
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   backfill:
-    name: Rank historical research
+    name: Backfill historical research
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -49,25 +60,43 @@ jobs:
           SANITY_WRITE_TOKEN: ${{ secrets.SANITY_WRITE_TOKEN }}
           NCBI_CONTACT_EMAIL: ${{ secrets.NCBI_CONTACT_EMAIL }}
           NCBI_API_KEY: ${{ secrets.NCBI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          RESEARCH_AI_MODEL: ${{ vars.RESEARCH_AI_MODEL }}
           NEXT_PUBLIC_SANITY_PROJECT_ID: 8wc8eouj
           NEXT_PUBLIC_SANITY_DATASET: production
           NEXT_PUBLIC_SANITY_API_VERSION: "2026-09-22"
-          BACKFILL_FROM_YEAR: ${{ github.event.inputs.fromYear || '2019' }}
-          BACKFILL_LIMIT: ${{ github.event.inputs.limit || '30' }}
+          BACKFILL_FROM: ${{ github.event.inputs.from || '2019-01-01' }}
+          BACKFILL_LIMIT: ${{ github.event.inputs.limit || '10' }}
           BACKFILL_DRY_RUN: ${{ github.event.inputs.dryRun }}
+          BACKFILL_CONFIRM: ${{ github.event.inputs.confirmWrite }}
+          BACKFILL_ENRICH: ${{ github.event.inputs.enrich }}
         run: |
-          echo "Research backfill is manual and dry-run only. It does not publish."
+          echo "Research backfill is manual. It never publishes."
+          if ! [[ "$BACKFILL_FROM" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+            echo "from must be YYYY-MM-DD. Received: $BACKFILL_FROM"
+            exit 1
+          fi
           if [ "$BACKFILL_DRY_RUN" = "false" ]; then
-            echo "Research backfill writing is not enabled. This phase is dry-run only."
-            exit 1
+            if [ "$BACKFILL_CONFIRM" != "CREATE DRAFTS" ]; then
+              echo "Refusing to write. When dry-run is unchecked, set confirmWrite to CREATE DRAFTS."
+              exit 1
+            fi
+            if ! [[ "$BACKFILL_LIMIT" =~ ^[0-9]+$ ]] || [ "$BACKFILL_LIMIT" -lt 1 ] || [ "$BACKFILL_LIMIT" -gt 25 ]; then
+              echo "limit must be an integer from 1 to 25 for a write. Received: $BACKFILL_LIMIT"
+              exit 1
+            fi
+            echo "Mode: write. Unpublished English drafts only. Published: 0."
+            ARGS=(--from="$BACKFILL_FROM" --limit="$BACKFILL_LIMIT" --write)
+            if [ "$BACKFILL_ENRICH" = "true" ]; then
+              echo "AI enrichment will run after draft creation and will not publish."
+              ARGS+=(--enrich)
+            fi
+            npm run research:backfill -- "${ARGS[@]}"
+          else
+            if ! [[ "$BACKFILL_LIMIT" =~ ^[0-9]+$ ]] || [ "$BACKFILL_LIMIT" -lt 1 ] || [ "$BACKFILL_LIMIT" -gt 100 ]; then
+              echo "limit must be an integer from 1 to 100 for a dry-run. Received: $BACKFILL_LIMIT"
+              exit 1
+            fi
+            echo "Mode: dry-run. No Sanity documents will be created, modified, or published."
+            npm run research:backfill -- --from="$BACKFILL_FROM" --limit="$BACKFILL_LIMIT" --dry-run
           fi
-          if ! [[ "$BACKFILL_FROM_YEAR" =~ ^[0-9]{4}$ ]]; then
-            echo "fromYear must be a 4-digit year. Received: $BACKFILL_FROM_YEAR"
-            exit 1
-          fi
-          if ! [[ "$BACKFILL_LIMIT" =~ ^[0-9]+$ ]] || [ "$BACKFILL_LIMIT" -lt 1 ] || [ "$BACKFILL_LIMIT" -gt 100 ]; then
-            echo "limit must be an integer from 1 to 100. Received: $BACKFILL_LIMIT"
-            exit 1
-          fi
-          echo "Mode: dry-run. No Sanity documents will be created, modified, or published."
-          npm run research:backfill -- --from="${BACKFILL_FROM_YEAR}-01-01" --limit="$BACKFILL_LIMIT" --dry-run
