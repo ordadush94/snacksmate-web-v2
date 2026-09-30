@@ -120,6 +120,11 @@ export const enContent: LandingContent = {
     downloadLabel: "Download",
     navLabel: "Footer",
   },
+  support: {
+    articlesHeading: "Latest articles",
+    articlesMore: "Learn more",
+    screenAlt: "Snacksmate screen showing short exercise snacks",
+  },
   store: {
     appStoreLabel: "App Store",
     playStoreLabel: "Google Play",

@@ -2,6 +2,7 @@ import type { StoreLinks } from "@/content/types";
 
 type StoreButtonsProps = {
   store: StoreLinks;
+  tone?: "solid" | "quiet";
 };
 
 function AppleIcon() {
@@ -20,9 +21,9 @@ function PlayIcon() {
   );
 }
 
-export function StoreButtons({ store }: StoreButtonsProps) {
+export function StoreButtons({ store, tone = "solid" }: StoreButtonsProps) {
   return (
-    <div className="store-row">
+    <div className={tone === "quiet" ? "store-row is-quiet" : "store-row"}>
       <a
         className="store-link"
         href={store.appStoreHref}

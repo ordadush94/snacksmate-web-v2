@@ -118,6 +118,11 @@ export const heContent: LandingContent = {
     downloadLabel: "הורדה",
     navLabel: "תחתית",
   },
+  support: {
+    articlesHeading: "כתבות אחרונות",
+    articlesMore: "למידע נוסף",
+    screenAlt: "מסך Snacksmate עם נשנושי כושר קצרים",
+  },
   store: {
     appStoreLabel: "App Store",
     playStoreLabel: "Google Play",

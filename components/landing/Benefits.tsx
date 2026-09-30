@@ -20,6 +20,7 @@ const benefitIcons = [
   </svg>,
   <svg
     key="trend"
+    className="icon-directional"
     width="22"
     height="22"
     viewBox="0 0 24 24"
@@ -66,11 +67,33 @@ export function Benefits({ content }: BenefitsProps) {
         <Reveal as="p" className="section-lead">
           {content.lead}
         </Reveal>
-        <div className="benefits-grid">
-          {content.items.map((item, index) => (
-            <Reveal as="article" className="benefit" key={item.title}>
+        <div className="benefits">
+          {content.items[0] ? (
+            <Reveal as="article" className="benefit benefit-lead" key={content.items[0].title}>
               <div className="icon" aria-hidden="true">
-                {benefitIcons[index]}
+                {benefitIcons[0]}
+              </div>
+              <h3>{content.items[0].title}</h3>
+              <p>{content.items[0].body}</p>
+            </Reveal>
+          ) : null}
+          {content.items.length > 1 ? (
+            <div className="benefits-pair">
+              {content.items.slice(1, 3).map((item, index) => (
+                <Reveal as="article" className="benefit" key={item.title}>
+                  <div className="icon" aria-hidden="true">
+                    {benefitIcons[index + 1]}
+                  </div>
+                  <h3>{item.title}</h3>
+                  <p>{item.body}</p>
+                </Reveal>
+              ))}
+            </div>
+          ) : null}
+          {content.items.slice(3).map((item, index) => (
+            <Reveal as="article" className="benefit benefit-quiet" key={item.title}>
+              <div className="icon" aria-hidden="true">
+                {benefitIcons[index + 3]}
               </div>
               <h3>{item.title}</h3>
               <p>{item.body}</p>

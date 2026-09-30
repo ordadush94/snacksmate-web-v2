@@ -16,17 +16,21 @@ export function SiteFooter({ content, locale }: SiteFooterProps) {
   return (
     <footer>
       <div className="wrap footer-inner">
-        <div>{content.copyright}</div>
-        <nav className="footer-nav" aria-label={content.navLabel}>
-          <Link href={articlesPath(locale)}>{articlesLabel}</Link>
-          <Link href={researchPath(locale)}>{researchLabel}</Link>
-          <a href={`/${locale}/#sm-download`}>{content.downloadLabel}</a>
-          <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer">
-            {content.privacyLabel}
-          </a>
-          <a href={TERMS_URL} target="_blank" rel="noopener noreferrer">
-            {content.termsLabel}
-          </a>
+        <p className="footer-copy">{content.copyright}</p>
+        <nav className="footer-groups" aria-label={content.navLabel}>
+          <div className="footer-nav">
+            <Link href={articlesPath(locale)}>{articlesLabel}</Link>
+            <Link href={researchPath(locale)}>{researchLabel}</Link>
+            <a href={`/${locale}/#sm-download`}>{content.downloadLabel}</a>
+          </div>
+          <div className="footer-nav footer-legal">
+            <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer">
+              {content.privacyLabel}
+            </a>
+            <a href={TERMS_URL} target="_blank" rel="noopener noreferrer">
+              {content.termsLabel}
+            </a>
+          </div>
         </nav>
       </div>
     </footer>
