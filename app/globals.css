@@ -1321,8 +1321,7 @@ h1, h2, h3,
 .article-meta,
 .trust-quote,
 .concept-highlight p,
-.evidence-list a,
-.evidence-meta,
+.related-study-title a,
 .home-article-list a,
 .content-card,
 .content-card h2 a {
@@ -1337,41 +1336,11 @@ h1, h2, h3,
   text-decoration: underline;
   text-underline-offset: 3px;
 }
-.effects-more { margin-top: 8px; }
-.evidence-list {
-  list-style: none;
-  margin: 8px 0 0;
-  padding: 0;
+main.landing .related-studies-list {
   max-width: 42rem;
-  border-top: 1px solid var(--line);
+  margin-top: 28px;
 }
-.evidence-list li {
-  padding: 16px 0;
-  border-bottom: 1px solid var(--line);
-}
-.evidence-list a {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 1.05rem;
-  line-height: 1.35;
-  text-decoration: none;
-}
-.evidence-list a:hover { color: var(--mint-deep); }
-.evidence-excerpt {
-  display: -webkit-box;
-  margin: 4px 0 0;
-  overflow: hidden;
-  color: var(--ink-soft);
-  font-size: 0.98rem;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-.evidence-meta {
-  margin: 6px 0 0;
-  color: var(--ink-soft);
-  font-size: 0.8rem;
-  line-height: 1.4;
-}
+.effects-more { margin-top: 16px; }
 .home-article-list {
   list-style: none;
   margin: 4px 0 0;

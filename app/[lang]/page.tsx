@@ -1,9 +1,15 @@
 import { notFound } from "next/navigation";
 import { getContent, isLocale } from "@/content";
 import { articlePath, formatArticleDate } from "@/content/articles";
-import { researchItemPath } from "@/content/research";
+import {
+  getResearchCopy,
+  researchItemPath,
+  researchTopicLabel,
+  studyDesignLabel,
+} from "@/content/research";
 import { LandingPage } from "@/components/landing/LandingPage";
 import type { HomeArticle, HomeStudy } from "@/components/landing/home-content";
+import { studySource } from "@/components/research/ResearchSummaryList";
 import { researchReaderTitle } from "@/lib/research-display";
 import { getArticlesByLanguage } from "@/sanity/lib/articles";
 import { getResearchByLanguage } from "@/sanity/lib/research";
@@ -30,13 +36,21 @@ export default async function LocalePage({ params }: PageProps<"/[lang]">) {
     dateTime: article.publishedAt,
   }));
 
-  const homeStudies: HomeStudy[] = studies.slice(0, HOME_RESEARCH_COUNT).map((study) => ({
-    id: study._id,
-    href: researchItemPath(lang, study.slug),
-    title: researchReaderTitle(study),
-    excerpt: study.excerpt?.trim() ?? "",
-    meta: [study.journal?.trim(), study.year].filter(Boolean).join(" · "),
-  }));
+  const researchCopy = getResearchCopy(lang);
+  const homeStudies: HomeStudy[] = studies.slice(0, HOME_RESEARCH_COUNT).map((study) => {
+    const topic = researchTopicLabel(study.topic, lang);
+    const design = studyDesignLabel(study.studyDesign, lang);
+
+    return {
+      id: study._id,
+      href: researchItemPath(lang, study.slug),
+      title: researchReaderTitle(study),
+      label: topic || design,
+      source: studySource(study.journal, study.year),
+      design: topic && design ? design : undefined,
+      readLabel: researchCopy.relatedRead,
+    };
+  });
 
   return (
     <LandingPage
