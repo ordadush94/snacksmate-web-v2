@@ -21,6 +21,71 @@ export type BackfillReportInput = {
   currentYear: number;
 };
 
+export type BackfillCreatedDraft = {
+  rank: number;
+  priorityScore: number;
+  title: string;
+  pmid: string;
+  doi: string | null;
+  draftId: string;
+};
+
+export type BackfillWriteReportInput = {
+  from: string;
+  to: string;
+  requested: number;
+  rankedEligible: number;
+  skippedExistingBeforeRun: number;
+  skippedExistingAtWrite: number;
+  failed: number;
+  published: 0;
+  created: readonly BackfillCreatedDraft[];
+  enrichment: "not_requested" | "completed" | "failed";
+};
+
+export function formatBackfillWriteReport(result: BackfillWriteReportInput): string {
+  const lines = [
+    "Historical Research Backfill",
+    "",
+    `Window: ${result.from} through ${result.to}`,
+    `Requested new drafts: ${result.requested}`,
+    `Ranked eligible: ${result.rankedEligible}`,
+    `Created: ${result.created.length}`,
+    `Skipped existing before run: ${result.skippedExistingBeforeRun}`,
+    `Skipped existing at write: ${result.skippedExistingAtWrite}`,
+    `Failed: ${result.failed}`,
+    "Published: 0",
+    "",
+    "Created drafts",
+  ];
+
+  if (result.created.length === 0) {
+    lines.push("None.");
+  } else {
+    for (const draft of result.created) {
+      lines.push(
+        [
+          `Rank: ${draft.rank}`,
+          `Priority score: ${draft.priorityScore.toFixed(2)}`,
+          `Title: ${draft.title}`,
+          `PMID: ${draft.pmid}`,
+          `DOI: ${draft.doi ?? "—"}`,
+          `Sanity draft id: ${draft.draftId}`,
+        ].join("\n"),
+      );
+      lines.push("");
+    }
+  }
+
+  if (result.enrichment === "failed") {
+    lines.push("AI enrichment: failed. Created source drafts were kept.");
+  } else if (result.enrichment === "completed") {
+    lines.push("AI enrichment: completed. Nothing was published.");
+  }
+
+  return lines.join("\n").trimEnd();
+}
+
 export function formatBackfillReport(result: BackfillReportInput): string {
   const lines: string[] = [
     "Research backfill — dry-run",

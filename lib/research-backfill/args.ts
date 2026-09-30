@@ -1,12 +1,15 @@
 export const DEFAULT_BACKFILL_FROM = "2019-01-01";
-export const DEFAULT_BACKFILL_LIMIT = 30;
-export const MAX_BACKFILL_LIMIT = 100;
-
-const WRITE_DISABLED =
-  "Research backfill writing is not implemented. This phase is dry-run only and makes zero Sanity mutations.";
+export const DEFAULT_BACKFILL_LIMIT = 10;
+/** Dry-run previews may rank a wider list than a write is allowed to create. */
+export const MAX_BACKFILL_DRY_RUN_LIMIT = 100;
+export const MAX_BACKFILL_WRITE_LIMIT = 25;
 
 export type BackfillArgs = {
-  dryRun: true;
+  dryRun: boolean;
+  /** Create unpublished English drafts. Never publishes. */
+  write: boolean;
+  /** After a write, run the existing enrichment runner as a separate stage. */
+  enrich: boolean;
   from: string;
   to: string;
   limit: number;
@@ -16,12 +19,26 @@ export function parseBackfillArgs(argv: string[], today: string | Date = current
   let from = DEFAULT_BACKFILL_FROM;
   let to = today instanceof Date ? today.toISOString().slice(0, 10) : today;
   let limit = String(DEFAULT_BACKFILL_LIMIT);
+  let write = false;
+  let dryRunFlag = false;
+  let enrich = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === "--dry-run") continue;
-    if (arg === "--write" || arg === "--no-dry-run") {
-      throw new Error(WRITE_DISABLED);
+    if (arg === "--dry-run") {
+      dryRunFlag = true;
+      continue;
+    }
+    if (arg === "--write") {
+      write = true;
+      continue;
+    }
+    if (arg === "--no-dry-run") {
+      throw new Error("Writing requires --write. Refusing --no-dry-run.");
+    }
+    if (arg === "--enrich") {
+      enrich = true;
+      continue;
     }
     if (arg === "--from") {
       from = readValue(argv, index, "--from");
@@ -53,6 +70,13 @@ export function parseBackfillArgs(argv: string[], today: string | Date = current
     throw new Error(`Unknown argument: ${arg}`);
   }
 
+  if (write && dryRunFlag) {
+    throw new Error("Pass either --dry-run or --write, not both.");
+  }
+  if (enrich && !write) {
+    throw new Error("--enrich runs only after --write creates drafts. A dry-run does not enrich.");
+  }
+
   const fromDate = assertIsoDate(from, "--from");
   const toDate = assertIsoDate(to, "--to");
   if (fromDate > toDate) {
@@ -60,19 +84,21 @@ export function parseBackfillArgs(argv: string[], today: string | Date = current
   }
 
   return {
-    dryRun: true,
+    dryRun: !write,
+    write,
+    enrich,
     from: fromDate,
     to: toDate,
-    limit: resolveBackfillLimit(limit),
+    limit: resolveBackfillLimit(limit, write),
   };
 }
 
-export function resolveBackfillLimit(value: string): number {
+export function resolveBackfillLimit(value: string, write = false): number {
+  const max = write ? MAX_BACKFILL_WRITE_LIMIT : MAX_BACKFILL_DRY_RUN_LIMIT;
   const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > MAX_BACKFILL_LIMIT) {
-    throw new Error(
-      `--limit must be an integer from 1 to ${MAX_BACKFILL_LIMIT}. Received: ${value}`,
-    );
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > max) {
+    const writeNote = write ? " when using --write" : "";
+    throw new Error(`--limit must be an integer from 1 to ${max}${writeNote}. Received: ${value}`);
   }
   return parsed;
 }

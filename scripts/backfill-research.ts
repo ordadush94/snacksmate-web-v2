@@ -1,5 +1,6 @@
 import { parseBackfillArgs } from "../lib/research-backfill/args";
-import { formatBackfillReport } from "../lib/research-backfill/report";
+import { enrichBackfillDrafts } from "../lib/research-backfill/enrich";
+import { formatBackfillReport, formatBackfillWriteReport } from "../lib/research-backfill/report";
 import { runResearchBackfill } from "../lib/research-backfill/run";
 import { assertDiscoveryConfig, PubmedUnavailableError } from "../lib/research-discovery/run";
 
@@ -15,6 +16,8 @@ async function main() {
 
   const result = await runResearchBackfill({
     dryRun: args.dryRun,
+    enrich: args.enrich,
+    enrichAfterWrite: args.enrich ? enrichBackfillDrafts : undefined,
     from: args.from,
     to: args.to,
     limit: args.limit,
@@ -28,7 +31,10 @@ async function main() {
     },
   });
 
-  console.log(formatBackfillReport(result));
+  console.log(result.dryRun ? formatBackfillReport(result) : formatBackfillWriteReport(result));
+  if (!result.dryRun && (result.enrichment === "failed" || result.writeAborted)) {
+    process.exitCode = 1;
+  }
 }
 
 main().catch((error: unknown) => {
