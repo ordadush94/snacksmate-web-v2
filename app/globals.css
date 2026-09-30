@@ -992,6 +992,91 @@ footer a:hover { color: var(--mint-deep); }
   color: var(--ink-soft);
   font-size: 0.95rem;
 }
+.related-studies {
+  margin-top: 64px;
+  padding-top: 28px;
+  border-top: 1px solid var(--line);
+}
+.related-studies h2 {
+  margin-bottom: 16px;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+.related-studies-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.related-study {
+  min-width: 0;
+  padding: 14px 16px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+}
+.related-study-label {
+  display: block;
+  margin: 0 0 6px;
+  color: var(--mint-deep);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+}
+html[dir="rtl"] .related-study-label { letter-spacing: 0; }
+.related-study-title {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: 1.02rem;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: 0;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+.related-study-title a {
+  color: inherit;
+  font-weight: inherit;
+  text-decoration: none;
+}
+.related-study-title a:hover { color: var(--mint-deep); }
+.related-study-title a:focus-visible {
+  outline: 2px solid var(--mint-deep);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.related-study-source,
+.related-study-design {
+  margin: 6px 0 0;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  font-weight: 400;
+  line-height: 1.4;
+}
+.related-study-design { margin-top: 2px; }
+.related-study-source bdi {
+  display: inline-block;
+  max-width: 100%;
+  unicode-bidi: isolate;
+  overflow-wrap: anywhere;
+}
+.related-study-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  margin-top: 10px;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+.related-study-link .icon-directional { display: inline-block; }
+.related-studies-all { margin: 14px 0 0; }
+.related-studies + .content-close {
+  margin-top: 56px;
+}
 
 .research-shell,
 .research-reading {
@@ -1221,6 +1306,9 @@ footer a:hover { color: var(--mint-deep); }
     grid-template-columns: 1fr;
     gap: 2px;
   }
+  .related-studies { margin-top: 48px; }
+  .related-study { padding: 12px 14px; }
+  .related-studies + .content-close { margin-top: 40px; }
 .content-card {
   padding: 18px 16px 16px;
 }

@@ -7,13 +7,12 @@ import {
   getArticlesCopy,
   topicLabel,
 } from "@/content/articles";
-import { researchItemPath } from "@/content/research";
 import {
   articleCanonicalUrl,
   articleJsonLd,
   breadcrumbJsonLd,
 } from "@/lib/article-seo";
-import { researchReaderTitle } from "@/lib/research-display";
+import { RelatedResearchList } from "@/components/research/RelatedResearchList";
 import { absoluteUrl } from "@/lib/site";
 import {
   articleImageAlt,
@@ -203,26 +202,17 @@ export function ArticleDetail({
             </ul>
           </section>
         ) : null}
+        <RelatedResearchList
+          items={relatedResearch}
+          locale={locale}
+          heading={copy.relatedResearchHeading}
+        />
         <section className="content-close">
           <p>
             <Link className="text-link" href={articlesPath(locale)}>
               {copy.backToArticles}
             </Link>
           </p>
-          {relatedResearch.length > 0 ? (
-            <div>
-              <h2>{copy.relatedResearchHeading}</h2>
-              <ul className="content-close-links">
-                {relatedResearch.map((item) => (
-                  <li key={item._id}>
-                    <Link href={researchItemPath(locale, item.slug)}>
-                      {researchReaderTitle(item)}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
           <p>
             <a className="text-link" href={`/${locale}/#sm-download`}>
               {copy.appCta}

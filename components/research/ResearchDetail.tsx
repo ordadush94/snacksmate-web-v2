@@ -4,7 +4,6 @@ import type { Locale } from "@/content/types";
 import { formatArticleDate } from "@/content/articles";
 import {
   getResearchCopy,
-  researchItemPath,
   researchPath,
   researchTopicLabel,
   studyDesignLabel,
@@ -30,6 +29,7 @@ import {
 } from "@/sanity/lib/research";
 import { ArticlePortableText } from "@/components/articles/ArticlePortableText";
 import { JsonLd } from "@/components/articles/JsonLd";
+import { RelatedResearchList } from "@/components/research/RelatedResearchList";
 import { PublicationShell } from "@/components/site/PublicationShell";
 
 type RelatedArticleLink = {
@@ -344,31 +344,6 @@ export function ResearchDetail({
             ) : null}
           </section>
         ) : null}
-        {related.length > 0 ? (
-          <section className="article-related" aria-labelledby="related-research">
-            <h2 id="related-research">{copy.relatedHeading}</h2>
-            <ul>
-              {related.map((item) => {
-                const itemTopic = researchTopicLabel(item.topic, locale);
-                const itemDesign = studyDesignLabel(item.studyDesign, locale);
-                const itemMeta = [item.journal?.trim(), item.year, itemDesign]
-                  .filter(Boolean)
-                  .join(" · ");
-                return (
-                  <li key={item._id}>
-                    {itemTopic ? (
-                      <p className="section-kicker">{itemTopic}</p>
-                    ) : null}
-                    <Link href={researchItemPath(locale, item.slug)}>
-                      {researchReaderTitle(item)}
-                    </Link>
-                    {itemMeta ? <span>{itemMeta}</span> : null}
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        ) : null}
         <section className="content-close">
           <h2>{copy.closingHeading}</h2>
           {hasTakeaway ? (
@@ -393,6 +368,7 @@ export function ResearchDetail({
             </a>
           </p>
         </section>
+        <RelatedResearchList items={related} locale={locale} />
       </div>
     </article>
     </PublicationShell>
