@@ -29,6 +29,8 @@ export type ResearchDraft = {
   studyDesign?: PubmedRecord["studyDesign"];
   sampleSize?: number;
   automationNote: string;
+  /** New automatic drafts enter the editorial queue. Enrichment does not require this to be empty. */
+  editorialStatus: "needs_review";
 };
 
 export function buildResearchDraft(input: {
@@ -86,6 +88,7 @@ export function buildResearchDraft(input: {
     ...(input.record.studyDesign ? { studyDesign: input.record.studyDesign } : {}),
     ...(input.record.sampleSize ? { sampleSize: input.record.sampleSize } : {}),
     automationNote: automationNote(input.relevanceRules, input.crossrefStatus),
+    editorialStatus: "needs_review",
   };
 }
 

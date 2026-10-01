@@ -7,6 +7,8 @@ export type TranslationArgs = {
   type: TranslationContentType;
   id?: string;
   missing: boolean;
+  /** Research-only. Localize drafts.research-pubmed-{PMID} without a published English document. */
+  fromDraft: boolean;
   dryRun: boolean;
   limit: number;
 };
@@ -15,6 +17,7 @@ export function parseTranslationArgs(argv: string[]): TranslationArgs {
   let dryRun = false;
   let missing = false;
   let write = false;
+  let fromDraft = false;
   let type: string | undefined;
   let id: string | undefined;
   let limit: string | undefined;
@@ -31,6 +34,10 @@ export function parseTranslationArgs(argv: string[]): TranslationArgs {
     }
     if (arg === "--write") {
       write = true;
+      continue;
+    }
+    if (arg === "--from-draft") {
+      fromDraft = true;
       continue;
     }
     if (arg === "--type") {
@@ -66,8 +73,17 @@ export function parseTranslationArgs(argv: string[]): TranslationArgs {
   if (!type || !isContentType(type)) {
     throw new Error("--type=article or --type=research is required.");
   }
+  if (fromDraft && type !== "research") {
+    throw new Error("--from-draft is only for --type=research. Articles still require a published English document.");
+  }
+  if (fromDraft && missing) {
+    throw new Error("Pass either --from-draft or --missing, not both.");
+  }
   if (id && missing) {
     throw new Error("Pass either --id or --missing, not both.");
+  }
+  if (fromDraft && !id) {
+    throw new Error("--from-draft requires --id=drafts.research-pubmed-{PMID}.");
   }
   if (!id && !missing) {
     throw new Error("Pass --id for one published document, or --missing for published documents without Hebrew.");
@@ -84,6 +100,7 @@ export function parseTranslationArgs(argv: string[]): TranslationArgs {
     type,
     ...(id ? { id } : {}),
     missing,
+    fromDraft,
     dryRun: dryRun || bulkDryRun,
     limit: missing ? resolveBulkLimit(limit) : 1,
   };

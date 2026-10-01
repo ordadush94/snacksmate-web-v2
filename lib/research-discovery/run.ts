@@ -1,6 +1,7 @@
+import { matchLinkedTranslation } from "../research-backfill/existing";
 import { RESEARCH_DISCOVERY_QUERIES } from "./config";
 import { createCrossrefClient } from "./crossref";
-import { buildResearchDraft } from "./draft";
+import { buildResearchDraft, type ResearchDraft } from "./draft";
 import { normalizeDoi } from "./normalize";
 import { createPubmedClient, PubmedUnavailableError, type PubmedRecord } from "./pubmed";
 import { assessRelevance, type RelevanceDecision } from "./relevance";
@@ -13,6 +14,15 @@ import {
 import type { ResearchIdentity } from "./dedupe";
 import { mapResearchTopic } from "./topics";
 
+/** Scheduled discovery writes at most this many new English drafts. */
+export const SCHEDULED_RESEARCH_CREATE_LIMIT = 10;
+
+export type DiscoveryDraftRef = {
+  pmid: string;
+  draftId: string;
+  title: string;
+};
+
 export type DiscoverySummary = {
   dryRun: boolean;
   lookbackDays: number;
@@ -22,7 +32,18 @@ export type DiscoverySummary = {
   rejected: number;
   reviewCandidates: number;
   autoDraftCandidates: number;
+  /** Unpublished drafts actually created. Always empty during dry-run. */
+  createdDrafts: DiscoveryDraftRef[];
+  /** Dry-run only: auto-draft studies inside the create limit. Nothing is written. */
+  wouldCreate: DiscoveryDraftRef[];
+  /** Eligible auto-draft studies past maxCreates. Nothing was written for these. */
+  withheldByLimit: DiscoveryDraftRef[];
   errors: number;
+};
+
+export type DiscoverySanityClient = {
+  fetch: (query: string) => Promise<unknown>;
+  create: (document: ResearchDraft) => Promise<unknown>;
 };
 
 export type DiscoveryConfig = {
@@ -30,12 +51,19 @@ export type DiscoveryConfig = {
   lookbackDays: number;
   email: string;
   apiKey?: string;
+  /**
+   * Stop after this many new English drafts.
+   * The scheduled pipeline passes SCHEDULED_RESEARCH_CREATE_LIMIT.
+   * Omit it for an uncapped manual write.
+   */
+  maxCreates?: number;
   sanity: {
     projectId: string;
     dataset: string;
     apiVersion: string;
     token: string;
   };
+  sanityClient?: DiscoverySanityClient;
   fetchImpl?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
@@ -53,8 +81,20 @@ export async function runResearchDiscovery(
     rejected: 0,
     reviewCandidates: 0,
     autoDraftCandidates: 0,
+    createdDrafts: [],
+    wouldCreate: [],
+    withheldByLimit: [],
     errors: 0,
   };
+
+  if (
+    config.maxCreates !== undefined &&
+    (!Number.isInteger(config.maxCreates) || config.maxCreates < 1)
+  ) {
+    throw new Error(
+      `maxCreates must be a positive integer. Received: ${String(config.maxCreates)}`,
+    );
+  }
 
   const pubmed = createPubmedClient({
     email: config.email,
@@ -85,7 +125,7 @@ export async function runResearchDiscovery(
     console.error(`Record error: ${error.message}`);
   }
 
-  const sanity = createSanityWriteClient(config.sanity);
+  const sanity = config.sanityClient ?? createSanityWriteClient(config.sanity);
   const existing = await loadResearchIdentities(sanity);
   const importedAt = new Date().toISOString();
 
@@ -98,6 +138,7 @@ export async function runResearchDiscovery(
         existing,
         importedAt,
         dryRun: config.dryRun,
+        maxCreates: config.maxCreates,
         sanity,
         summary,
       });
@@ -120,7 +161,8 @@ async function processRecord(input: {
   existing: ResearchIdentity[];
   importedAt: string;
   dryRun: boolean;
-  sanity: ReturnType<typeof createSanityWriteClient>;
+  maxCreates?: number;
+  sanity: DiscoverySanityClient;
   summary: DiscoverySummary;
 }) {
   const relevance = assessRelevance({
@@ -169,7 +211,7 @@ async function processRecord(input: {
     return;
   }
 
-  const duplicate = duplicateOf(draft, input.existing);
+  const duplicate = duplicateOf(draft, input.existing) ?? linkedDuplicate(draft, input.existing);
   if (duplicate) {
     input.summary.duplicatesSkipped += 1;
     console.log(
@@ -178,8 +220,22 @@ async function processRecord(input: {
     return;
   }
 
+  const ref = { pmid: draft.pmid, draftId: draft._id, title: draft.title };
+  const accepted = input.dryRun
+    ? input.summary.autoDraftCandidates
+    : input.summary.createdDrafts.length;
+  const withinLimit = input.maxCreates === undefined || accepted < input.maxCreates;
+  if (!withinLimit) {
+    input.summary.withheldByLimit.push(ref);
+    console.log(
+      `Deferred over create limit (${input.maxCreates}): ${draft._id} — ${draft.title}`,
+    );
+    return;
+  }
+
   if (input.dryRun) {
     input.summary.autoDraftCandidates += 1;
+    input.summary.wouldCreate.push(ref);
     console.log(
       `Would create ${draft._id} — ${draft.title} [${draft.topic}]`,
     );
@@ -188,6 +244,23 @@ async function processRecord(input: {
   }
 
   // Review candidates and rejections return above. Only AUTO_DRAFT reaches Sanity.
+  const fresh = await loadResearchIdentities(input.sanity);
+  const freshDuplicate = duplicateOf(draft, fresh) ?? linkedDuplicate(draft, fresh);
+  if (freshDuplicate) {
+    input.summary.duplicatesSkipped += 1;
+    console.log(
+      `Duplicate skipped: PMID ${draft.pmid} matches ${freshDuplicate.id} by ${freshDuplicate.reason}`,
+    );
+    input.existing.push({
+      id: freshDuplicate.id,
+      pmid: draft.pmid,
+      doi: draft.doi,
+      title: draft.title,
+      slug: draft.slug.current,
+    });
+    return;
+  }
+
   const result = await createResearchDraft(input.sanity, draft);
   if (result === "duplicate") {
     input.summary.duplicatesSkipped += 1;
@@ -196,8 +269,21 @@ async function processRecord(input: {
   }
 
   input.summary.autoDraftCandidates += 1;
+  input.summary.createdDrafts.push(ref);
   console.log(`Draft created: ${draft._id} — ${draft.title}`);
   input.existing.push(identityFromDraft(draft));
+}
+
+function linkedDuplicate(
+  draft: ResearchDraft,
+  existing: readonly ResearchIdentity[],
+): { id: string; reason: "translation" } | null {
+  const linked = matchLinkedTranslation(
+    { draftId: draft._id, slug: draft.slug.current },
+    existing,
+  );
+  if (!linked) return null;
+  return { id: linked.matchedDocumentId, reason: "translation" };
 }
 
 function logClassification(
@@ -238,6 +324,8 @@ function printSummary(summary: DiscoverySummary) {
   console.log(`  Queries run: ${summary.queriesRun}`);
   console.log(`  Records found: ${summary.pubmedRecordsFound}`);
   console.log(`  Auto-draft candidates: ${summary.autoDraftCandidates}`);
+  console.log(`  English drafts created: ${summary.createdDrafts.length}`);
+  console.log(`  Deferred over create limit: ${summary.withheldByLimit.length}`);
   console.log(`  Review candidates: ${summary.reviewCandidates}`);
   console.log(`  Rejected: ${summary.rejected}`);
   console.log(`  Duplicates: ${summary.duplicatesSkipped}`);

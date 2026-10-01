@@ -24,6 +24,7 @@ export type EnrichmentSummary = {
   skipped: number;
   failed: number;
   insufficientAbstracts: string[];
+  pmidResults: { pmid: string; outcome: "enriched" | "failed" | "skipped" }[];
 };
 
 export type PubmedEnrichmentRecord = EnrichmentSource & {
@@ -61,6 +62,7 @@ export async function runResearchEnrichment(input: {
     skipped: 0,
     failed: 0,
     insufficientAbstracts: [],
+    pmidResults: [],
   };
   const now = input.now ?? (() => new Date().toISOString());
 
@@ -82,6 +84,7 @@ export async function runResearchEnrichment(input: {
   for (const draft of input.drafts) {
     if (isRejectedEditorialStatus(draft.editorialStatus)) {
       summary.skipped += 1;
+      summary.pmidResults.push({ pmid: draft.pmid, outcome: "skipped" });
       console.log(
         `PMID ${draft.pmid}: skipped. Editorial status is rejected. The draft was not changed.`,
       );
@@ -91,6 +94,7 @@ export async function runResearchEnrichment(input: {
       assertRunnableEnrichmentDraft(draft);
     } catch (error) {
       summary.failed += 1;
+      summary.pmidResults.push({ pmid: draft.pmid, outcome: "failed" });
       console.error(
         `PMID ${draft.pmid}: ${errorMessage(error)} The document was not changed.`,
       );
@@ -117,6 +121,7 @@ export async function runResearchEnrichment(input: {
     const record = records.get(draft.pmid);
     if (!record) {
       summary.failed += 1;
+      summary.pmidResults.push({ pmid: draft.pmid, outcome: "failed" });
       console.error(`PMID ${draft.pmid}: PubMed did not return a record. The draft was not changed.`);
       continue;
     }
@@ -135,6 +140,7 @@ export async function runResearchEnrichment(input: {
       });
     } catch (error) {
       summary.failed += 1;
+      summary.pmidResults.push({ pmid: draft.pmid, outcome: "failed" });
       console.error(`PMID ${draft.pmid}: ${errorMessage(error)} The draft was not changed.`);
     }
   }
@@ -169,6 +175,7 @@ async function enrichOne(input: {
 
   if (!input.force && !hasEnrichableGap(input.draft)) {
     input.summary.skipped += 1;
+    input.summary.pmidResults.push({ pmid: input.draft.pmid, outcome: "skipped" });
     console.log(`PMID ${input.draft.pmid}: skipped. Public fields are already populated.`);
     return;
   }
@@ -179,6 +186,7 @@ async function enrichOne(input: {
     raw = await input.complete(promptFor(input.draft, input.record));
   } catch (error) {
     input.summary.failed += 1;
+    input.summary.pmidResults.push({ pmid: input.draft.pmid, outcome: "failed" });
     console.error(
       `PMID ${input.draft.pmid}: AI call failed. ${errorMessage(error)} The draft was not changed.`,
     );
@@ -191,6 +199,7 @@ async function enrichOne(input: {
   } catch (error) {
     if (!(error instanceof EnrichmentValidationError)) throw error;
     input.summary.failed += 1;
+    input.summary.pmidResults.push({ pmid: input.draft.pmid, outcome: "failed" });
     console.error(
       `PMID ${input.draft.pmid}: AI response failed validation. ${error.message} The draft was not changed.`,
     );
@@ -283,13 +292,18 @@ async function commitPlan(
   writeDraft: (id: string, fields: Record<string, unknown>) => Promise<void>,
   summary: EnrichmentSummary,
 ) {
-  if (dryRun) return;
+  if (dryRun) {
+    summary.pmidResults.push({ pmid: plan.pmid, outcome: "skipped" });
+    return;
+  }
 
   try {
     await writeDraft(plan.draftId, plan.set);
     summary.enriched += 1;
+    summary.pmidResults.push({ pmid: plan.pmid, outcome: "enriched" });
   } catch (error) {
     summary.failed += 1;
+    summary.pmidResults.push({ pmid: plan.pmid, outcome: "failed" });
     console.error(
       `PMID ${plan.pmid}: Sanity draft update failed. ${errorMessage(error)} The draft was not marked completed.`,
     );

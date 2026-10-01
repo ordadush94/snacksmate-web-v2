@@ -62,7 +62,21 @@ const COARSE_STUDY_DESIGNS = new Set([
   "meta-analysis",
 ]);
 
-const HUMAN_LOCKED_STATUSES = new Set(["reviewed", "ready_to_publish", "published_manually"]);
+/**
+ * A person has moved the draft past AI review.
+ * Schema values are ready and published. The other three are older stored
+ * values; they stay locked so AI cannot overwrite that content.
+ * needs_review is the automatic status and is not a lock.
+ */
+export const HUMAN_REVIEWED_EDITORIAL_STATUSES = [
+  "ready",
+  "published",
+  "reviewed",
+  "ready_to_publish",
+  "published_manually",
+] as const;
+
+const HUMAN_LOCKED_STATUSES = new Set<string>(HUMAN_REVIEWED_EDITORIAL_STATUSES);
 
 const SCIENTIFIC_FIELDS = new Set([
   "excerpt",
@@ -137,6 +151,7 @@ export type ResearchDraftSnapshot = {
   journal?: string | null;
   doi?: string | null;
   editorialStatus?: string | null;
+  aiEnrichmentStatus?: string | null;
   automationNote?: string | null;
   editorialChecklist?: EditorialChecklistSnapshot | null;
 };
@@ -923,13 +938,7 @@ const SEO_TITLE_MAX = 70;
 const SEO_DESCRIPTION_MIN = 120;
 const SEO_DESCRIPTION_MAX = 180;
 const SEO_EVIDENCE: readonly Evidence[] = ["abstract", "metadata", "abstract_and_metadata"];
-const SEO_LOCKED_STATUSES = new Set([
-  "reviewed",
-  "ready_to_publish",
-  "published_manually",
-  "ready",
-  "published",
-]);
+const SEO_LOCKED_STATUSES = HUMAN_LOCKED_STATUSES;
 const SEO_PLACEHOLDERS = new Set([
   "n/a",
   "na",
