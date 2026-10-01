@@ -203,7 +203,13 @@ async function main() {
     },
   });
 
-  console.log(formatResearchAutomationReport(combineAutomationReport(discovery, automation)));
+  const report = combineAutomationReport(discovery, automation);
+  // Manual GitHub Actions sets this for the log only. The pipeline above is shared with the schedule.
+  if (process.env.RESEARCH_AUTOMATION_MODE === "manual") {
+    report.manualFullAutomation = true;
+    report.maxCreates = args.maxCreates;
+  }
+  console.log(formatResearchAutomationReport(report));
   if (automation.enrichmentFailed > 0 || automation.translationFailed > 0) {
     process.exitCode = 1;
   }

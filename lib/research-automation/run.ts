@@ -29,6 +29,13 @@ export type ResearchAutomationReport = {
   translationFailed: number;
   published: 0;
   withheldByLimit: number;
+  /**
+   * Report label for a manual GitHub Actions full-automation run.
+   * It does not change discovery, enrichment, translation, or publishing.
+   */
+  manualFullAutomation?: boolean;
+  /** Create cap printed for a manual full-automation run. */
+  maxCreates?: number;
   studies: AutomationStudyReport[];
 };
 
@@ -334,32 +341,48 @@ export function combineAutomationReport(
 }
 
 export function formatResearchAutomationReport(report: ResearchAutomationReport): string {
-  const lines = [
-    "Research Automation",
-    "",
-    `Discovered: ${report.discovered}`,
-    `Rejected: ${report.rejected}`,
-    `Review candidates: ${report.reviewCandidates}`,
-    `Eligible: ${report.eligible}`,
-    `Existing: ${report.existing}`,
-    `English drafts created: ${report.englishDraftsCreated}`,
-    `Enriched successfully: ${report.enrichedSuccessfully}`,
-    `Enrichment failed: ${report.enrichmentFailed}`,
-    `Hebrew drafts created: ${report.hebrewDraftsCreated}`,
-    `Translation failed: ${report.translationFailed}`,
-    "Published: 0",
-  ];
+  const lines = ["Research Automation", ""];
 
-  if (report.dryRun) {
+  if (report.manualFullAutomation) {
     lines.push(
-      `Would create English drafts: ${report.studies.filter((study) => study.note.startsWith("Dry-run. This study")).length}`,
-      `Would enrich: ${report.studies.filter((study) => study.note.startsWith("Dry-run. This study")).length}`,
-      `Would create Hebrew drafts: ${report.studies.filter((study) => study.note.startsWith("Dry-run. This study")).length}`,
-      "Dry-run does not call the enrichment or translation models and does not write.",
+      "Mode: manual full automation",
+      `Max creates: ${report.maxCreates ?? ""}`,
+      `Eligible: ${report.eligible}`,
+      `Existing: ${report.existing}`,
+      `English drafts created: ${report.englishDraftsCreated}`,
+      `Enriched successfully: ${report.enrichedSuccessfully}`,
+      `Enrichment failed: ${report.enrichmentFailed}`,
+      `Hebrew drafts created: ${report.hebrewDraftsCreated}`,
+      `Translation failed: ${report.translationFailed}`,
+      `Deferred: ${report.withheldByLimit}`,
+      "Published: 0",
     );
-  }
-  if (report.withheldByLimit > 0) {
-    lines.push(`Deferred over create limit: ${report.withheldByLimit}`);
+  } else {
+    lines.push(
+      `Discovered: ${report.discovered}`,
+      `Rejected: ${report.rejected}`,
+      `Review candidates: ${report.reviewCandidates}`,
+      `Eligible: ${report.eligible}`,
+      `Existing: ${report.existing}`,
+      `English drafts created: ${report.englishDraftsCreated}`,
+      `Enriched successfully: ${report.enrichedSuccessfully}`,
+      `Enrichment failed: ${report.enrichmentFailed}`,
+      `Hebrew drafts created: ${report.hebrewDraftsCreated}`,
+      `Translation failed: ${report.translationFailed}`,
+      "Published: 0",
+    );
+
+    if (report.dryRun) {
+      lines.push(
+        `Would create English drafts: ${report.studies.filter((study) => study.note.startsWith("Dry-run. This study")).length}`,
+        `Would enrich: ${report.studies.filter((study) => study.note.startsWith("Dry-run. This study")).length}`,
+        `Would create Hebrew drafts: ${report.studies.filter((study) => study.note.startsWith("Dry-run. This study")).length}`,
+        "Dry-run does not call the enrichment or translation models and does not write.",
+      );
+    }
+    if (report.withheldByLimit > 0) {
+      lines.push(`Deferred over create limit: ${report.withheldByLimit}`);
+    }
   }
 
   for (const study of report.studies) {
