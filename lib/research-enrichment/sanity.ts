@@ -40,6 +40,7 @@ export const ELIGIBLE_DRAFTS_QUERY = `*[
   doi,
   importSource,
   editorialStatus,
+  aiEnrichmentStatus,
   automationNote,
   editorialChecklist
 }`;
@@ -72,6 +73,7 @@ export const DRAFTS_BY_PMID_QUERY = `*[
   doi,
   importSource,
   editorialStatus,
+  aiEnrichmentStatus,
   automationNote,
   editorialChecklist
 }`;
@@ -158,6 +160,7 @@ function toSnapshot(value: unknown): ResearchDraftSnapshot | null {
     journal: optionalString(row.journal),
     doi: optionalString(row.doi),
     editorialStatus: optionalString(row.editorialStatus),
+    aiEnrichmentStatus: optionalString(row.aiEnrichmentStatus),
     automationNote: optionalString(row.automationNote),
     editorialChecklist: checklistOrNull(row.editorialChecklist),
   };

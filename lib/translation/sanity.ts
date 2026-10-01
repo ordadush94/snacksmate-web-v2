@@ -56,6 +56,15 @@ export const PUBLISHED_ENGLISH_BY_ID_QUERY = `*[
   !(_id in path("drafts.**"))
 ][0] ${DOCUMENT_FIELDS}`;
 
+/** Research-only. Articles keep using the published-document query above. */
+export const RESEARCH_DRAFT_BY_ID_QUERY = `*[
+  _type == "research" &&
+  _id == $id &&
+  _id in path("drafts.**")
+][0] ${DOCUMENT_FIELDS}`;
+
+const RESEARCH_DRAFT_ID = /^drafts\.research-pubmed-\d{1,9}$/;
+
 export const PUBLISHED_ENGLISH_INDEX_QUERY = `*[
   _type == $type &&
   language == "en" &&
@@ -95,7 +104,7 @@ export async function loadPublishedEnglishDocument(
     type,
     id: publishedId,
   });
-  if (row) return normalizeEnglishDocument(row, type);
+  if (row) return normalizeEnglishDocument(row, type, { requirePublishedAt: true });
 
   const draft = await client.fetch<unknown>(DRAFT_EXISTS_QUERY, {
     type,
@@ -133,6 +142,36 @@ export async function loadEnglishDocumentsByIds(
   return documents;
 }
 
+/**
+ * Load one unpublished English PubMed research draft for Hebrew localization.
+ * The Hebrew draft's translationSourceId is the logical id without the drafts
+ * prefix, so it still matches after a person publishes the English document.
+ */
+export async function loadEnglishResearchDraft(
+  client: SanityClient,
+  id: string,
+): Promise<EnglishDocument> {
+  const draftId = normalizeResearchDraftId(id);
+  const row = await client.fetch<unknown>(RESEARCH_DRAFT_BY_ID_QUERY, { id: draftId });
+  if (!row) {
+    throw new Error(
+      `No English research draft found for ${draftId}. Draft-source localization does not read published documents and does not create one.`,
+    );
+  }
+  return normalizeEnglishDocument(row, "research", { requirePublishedAt: false });
+}
+
+export function normalizeResearchDraftId(id: string): string {
+  const trimmed = id.trim();
+  const draftId = trimmed.startsWith("drafts.") ? trimmed : `drafts.${trimmed}`;
+  if (!RESEARCH_DRAFT_ID.test(draftId)) {
+    throw new Error(
+      `Refusing to translate ${id}. Draft-source localization only accepts drafts.research-pubmed-{PMID}.`,
+    );
+  }
+  return draftId;
+}
+
 export async function loadHebrewLinks(
   client: SanityClient,
   type: TranslationContentType,
@@ -164,21 +203,27 @@ export async function createHebrewDraft(client: SanityClient, draft: HebrewDraft
   await client.create(draft);
 }
 
-function normalizeEnglishDocument(value: unknown, type: TranslationContentType): EnglishDocument {
+function normalizeEnglishDocument(
+  value: unknown,
+  type: TranslationContentType,
+  options: { requirePublishedAt: boolean },
+): EnglishDocument {
   if (!isRecord(value)) throw new Error("Sanity returned an unreadable document.");
   if (value._type !== type) {
     throw new Error(`Document ${String(value._id)} is not a ${type}.`);
   }
   if (value.language !== "en") {
     throw new Error(
-      `Refusing to translate ${String(value._id)}. Only published English documents are localized.`,
+      options.requirePublishedAt
+        ? `Refusing to translate ${String(value._id)}. Only published English documents are localized.`
+        : `Refusing to translate ${String(value._id)}. Draft-source localization only accepts English research drafts.`,
     );
   }
   const editorialStatus = optionalString(value.editorialStatus);
   if (type === "research" && editorialStatus === "rejected") {
     throw new Error(`Refusing to translate rejected research document ${String(value._id)}.`);
   }
-  if (type === "research" && !optionalString(value.publishedAt)) {
+  if (type === "research" && options.requirePublishedAt && !optionalString(value.publishedAt)) {
     throw new Error(`Refusing to translate research ${String(value._id)} without a published date.`);
   }
 

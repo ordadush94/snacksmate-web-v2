@@ -13,6 +13,7 @@ import {
   researchTranslationQuery,
 } from "../../sanity/lib/queries";
 import { parseTranslationArgs } from "./args";
+import { loadEnglishResearchDraft, loadPublishedEnglishDocument } from "./sanity";
 import {
   assertHebrewDraftId,
   buildHebrewDraft,
@@ -880,6 +881,90 @@ test("bulk translation defaults to dry-run and a single id can target one docume
   assert.equal(single.id, "research-pubmed-42798426");
   assert.throws(() => parseTranslationArgs(["--missing", "--type=research", "--limit=100"]));
   assert.throws(() => parseTranslationArgs(["--type=research"]));
+  assert.throws(() => parseTranslationArgs(["--from-draft", "--type=article", "--id=article-1"]));
+  const draftMode = parseTranslationArgs([
+    "--from-draft",
+    "--type=research",
+    "--id=drafts.research-pubmed-42798426",
+  ]);
+  assert.equal(draftMode.fromDraft, true);
+  assert.equal(draftMode.dryRun, false);
+  assert.equal(draftMode.type, "research");
+});
+
+test("a research draft links to Hebrew without publishing, and articles still require a published source", async () => {
+  const source = {
+    ...researchFixture(),
+    _id: "drafts.research-pubmed-42798426",
+  };
+  const draft = buildHebrewDraft({
+    source,
+    translation: researchTranslation(),
+    model: MODEL,
+    translatedAt: TRANSLATED_AT,
+  });
+  assert.equal(draft._id, "drafts.research-he-research-pubmed-42798426");
+  assert.equal(draft.translationSourceId, "research-pubmed-42798426");
+  assert.equal(draft.translationSlug, source.slug);
+  assert.equal(draft.slug.current, source.slug);
+  assert.equal(draft.language, "he");
+  assert.equal(draft.translationStatus, "needs_review");
+  assert.equal(draft.editorialStatus, "needs_review");
+  assert.equal(draft.title, source.title);
+
+  const existing = {
+    _id: draft._id,
+    translationSourceId: "research-pubmed-42798426",
+    translationSlug: source.slug,
+    slug: source.slug,
+  };
+  assert.equal(matchingHebrewLink(source, [existing])?._id, draft._id);
+  let writes = 0;
+  const skipped = await runHebrewTranslation({
+    dryRun: false,
+    model: MODEL,
+    sources: [source],
+    existing: [existing],
+    translate: async () => researchTranslation(),
+    writeDraft: async () => {
+      writes += 1;
+    },
+    log: () => undefined,
+  });
+  assert.equal(writes, 0);
+  assert.equal(skipped.skipped, 1);
+  assert.equal(skipped.created, 0);
+
+  const client = {
+    fetch: async (query: string, params?: { id?: string }) => {
+      if (query.includes('!(_id in path("drafts.**"))')) return null;
+      if (params?.id === "drafts.article-1") {
+        return { _id: "drafts.article-1", language: "en", _type: "article" };
+      }
+      if (params?.id === "drafts.research-pubmed-42798426") {
+        return {
+          ...source,
+          slug: source.slug,
+        };
+      }
+      return null;
+    },
+  };
+  await assert.rejects(
+    () => loadPublishedEnglishDocument(client as unknown as SanityClient, "article", "article-1"),
+    /unpublished draft/,
+  );
+  await assert.rejects(
+    () => loadEnglishResearchDraft(client as unknown as SanityClient, "drafts.article-1"),
+    /drafts\.research-pubmed-\{PMID\}/,
+  );
+  const loaded = await loadEnglishResearchDraft(
+    client as unknown as SanityClient,
+    "drafts.research-pubmed-42798426",
+  );
+  assert.equal(loaded._id, "drafts.research-pubmed-42798426");
+  assert.equal(loaded._type, "research");
+  assert.equal(loaded.language, "en");
 });
 
 function articleFixture(): EnglishArticle {

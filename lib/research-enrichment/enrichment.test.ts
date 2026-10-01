@@ -708,6 +708,24 @@ test("PMID 42783760 does not imply a glucose benefit or keep a coarser design", 
   });
   const lockedPlan = planFor(locked, output, { title, abstract }, { force: true });
   assert.equal("studyDesign" in lockedPlan.set, false);
+
+  for (const status of ["ready", "published"] as const) {
+    const schemaLocked = pmidDraft("42783760", {
+      studyDesign: "meta-analysis",
+      editorialStatus: status,
+      excerpt: "Editor kept this summary of the umbrella review.",
+    });
+    const kept = planFor(schemaLocked, output, { title, abstract }, { force: true });
+    assert.equal("studyDesign" in kept.set, false, status);
+    assert.equal("excerpt" in kept.set, false, status);
+  }
+
+  const reviewing = pmidDraft("42783760", {
+    studyDesign: "meta-analysis",
+    editorialStatus: "needs_review",
+  });
+  const revised = planFor(reviewing, output, { title, abstract }, { force: true });
+  assert.equal(revised.set.studyDesign, "umbrella-review");
 });
 
 test("PMID 42652914 does not claim blood-flow restriction superiority or invent a control", () => {

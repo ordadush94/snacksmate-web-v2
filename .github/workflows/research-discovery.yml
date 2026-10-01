@@ -1,9 +1,11 @@
 name: Research Discovery
 
-# SAFETY: every scheduled run is dry-run only and must not create or modify Sanity documents.
-# A real draft-creation run is possible only from workflow_dispatch when "dry_run" is explicitly false.
-# Even then, only AUTO_DRAFT records may be written. REVIEW_CANDIDATE records are never written.
-# The manual dry-run input defaults to true.
+# SAFETY: the Monday/Thursday schedule creates at most 10 unpublished English drafts,
+# then runs the existing enrichment and Hebrew translation on those new drafts only.
+# It never publishes. Review candidates and rejections are log-only.
+# workflow_dispatch dry-run remains the default and writes nothing.
+# A manual write (dry-run unchecked) still creates English drafts only, with no cap,
+# and does not enrich or translate.
 on:
   workflow_dispatch:
     inputs:
@@ -17,7 +19,7 @@ on:
         required: false
         default: "14"
   schedule:
-    # Monday and Thursday 08:00 UTC. These runs always pass --dry-run.
+    # Monday and Thursday 08:00 UTC. Creates at most 10 unpublished drafts, then enriches and translates them.
     - cron: "0 8 * * 1,4"
 
 permissions:
@@ -27,7 +29,7 @@ jobs:
   discover:
     name: Discover research drafts
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -46,19 +48,23 @@ jobs:
           SANITY_WRITE_TOKEN: ${{ secrets.SANITY_WRITE_TOKEN }}
           NCBI_CONTACT_EMAIL: ${{ secrets.NCBI_CONTACT_EMAIL }}
           NCBI_API_KEY: ${{ secrets.NCBI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          RESEARCH_AI_MODEL: ${{ vars.RESEARCH_AI_MODEL }}
           NEXT_PUBLIC_SANITY_PROJECT_ID: 8wc8eouj
           NEXT_PUBLIC_SANITY_DATASET: production
           NEXT_PUBLIC_SANITY_API_VERSION: "2026-09-22"
           RESEARCH_LOOKBACK_DAYS: ${{ github.event.inputs.lookback_days || '14' }}
           # True only for a manual run with dry-run explicitly disabled.
-          # Scheduled runs, and manual runs that leave dry-run checked, stay false.
+          # Scheduled runs use the draft pipeline instead of this flag.
           WRITE_DRAFTS: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.dry_run == false || github.event.inputs.dry_run == 'false') }}
         run: |
-          echo "Scheduled Monday/Thursday runs always use --dry-run."
-          echo "Manual runs create Sanity drafts only when dry-run is explicitly disabled."
           echo "Only AUTO_DRAFT records can create Sanity drafts. REVIEW_CANDIDATE records are never written."
-          if [ "$WRITE_DRAFTS" = "true" ]; then
-            echo "Mode: create Sanity drafts (manual opt-in)."
+          echo "Published: 0"
+          if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
+            echo "Mode: scheduled draft pipeline. At most 10 new English drafts, then enrichment and Hebrew drafts. Nothing is published."
+            npm run research:automate -- --max-creates=10
+          elif [ "$WRITE_DRAFTS" = "true" ]; then
+            echo "Mode: create Sanity drafts (manual opt-in). Enrichment and Hebrew translation are not run."
             npm run research:discover
           else
             echo "Mode: dry-run. No Sanity documents will be created or modified."

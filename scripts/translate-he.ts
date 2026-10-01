@@ -11,6 +11,7 @@ import { runHebrewTranslation } from "../lib/translation/run";
 import {
   createHebrewDraft,
   loadEnglishDocumentsByIds,
+  loadEnglishResearchDraft,
   loadHebrewLinks,
   loadPublishedEnglishDocument,
   loadPublishedEnglishIndex,
@@ -72,9 +73,11 @@ async function main() {
   });
 
   const existing = await loadHebrewLinks(sanity, args.type);
-  const sources = args.id
-    ? [await loadPublishedEnglishDocument(sanity, args.type, args.id)]
-    : await selectMissing(sanity, args.type, args.limit, existing);
+  const sources = args.fromDraft
+    ? [await loadEnglishResearchDraft(sanity, args.id ?? "")]
+    : args.id
+      ? [await loadPublishedEnglishDocument(sanity, args.type, args.id)]
+      : await selectMissing(sanity, args.type, args.limit, existing);
 
   if (sources.length === 0) {
     console.log(

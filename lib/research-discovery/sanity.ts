@@ -48,7 +48,7 @@ function isResearchIdentity(row: unknown): row is ResearchIdentity {
 }
 
 export async function createResearchDraft(
-  client: SanityClient,
+  client: { create: (document: ResearchDraft) => Promise<unknown> },
   draft: ResearchDraft,
 ): Promise<"created" | "duplicate"> {
   try {
