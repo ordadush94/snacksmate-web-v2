@@ -300,6 +300,99 @@ test("needs_review can translate when the excerpt exists, and failed enrichment 
   );
 });
 
+test("a manual full-automation report names the mode and never publishes", () => {
+  const report = formatResearchAutomationReport({
+    dryRun: false,
+    discovered: 4,
+    rejected: 1,
+    reviewCandidates: 1,
+    eligible: 2,
+    existing: 3,
+    englishDraftsCreated: 1,
+    enrichedSuccessfully: 1,
+    enrichmentFailed: 0,
+    hebrewDraftsCreated: 1,
+    translationFailed: 0,
+    published: 0,
+    withheldByLimit: 1,
+    manualFullAutomation: true,
+    maxCreates: 1,
+    studies: [
+      {
+        pmid: "123",
+        title: "Exercise snacks trial",
+        englishDraftId: "drafts.research-pubmed-123",
+        aiEnrichmentStatus: "needs_review",
+        hebrewDraftId: "drafts.research-he-research-pubmed-123",
+        translationStatus: "needs_review",
+        translationReviewWarnings: ["Glossary term is missing."],
+        note: "The English draft was kept.",
+      },
+      {
+        pmid: "456",
+        title: "Deferred exercise snacks trial",
+        englishDraftId: "drafts.research-pubmed-456",
+        aiEnrichmentStatus: "not_run",
+        translationReviewWarnings: [],
+        note: "Past the scheduled create limit. No draft was created.",
+      },
+    ],
+  });
+
+  assert.equal(
+    report.startsWith(
+      [
+        "Research Automation",
+        "",
+        "Mode: manual full automation",
+        "Max creates: 1",
+        "Eligible: 2",
+        "Existing: 3",
+        "English drafts created: 1",
+        "Enriched successfully: 1",
+        "Enrichment failed: 0",
+        "Hebrew drafts created: 1",
+        "Translation failed: 0",
+        "Deferred: 1",
+        "Published: 0",
+      ].join("\n"),
+    ),
+    true,
+  );
+  assert.match(report, /PMID: 123/);
+  assert.match(report, /Title: Exercise snacks trial/);
+  assert.match(report, /English draft id: drafts\.research-pubmed-123/);
+  assert.match(report, /AI enrichment status: needs_review/);
+  assert.match(report, /Hebrew draft id: drafts\.research-he-research-pubmed-123/);
+  assert.match(report, /Translation status: needs_review/);
+  assert.match(report, /Glossary term is missing\./);
+  assert.match(report, /PMID: 456/);
+  assert.match(report, /Hebrew draft id: \(not created\)/);
+  assert.equal(report.includes("sk-"), false);
+  assert.equal(report.includes("OPENAI_API_KEY"), false);
+  assert.equal(report.includes(".publish("), false);
+
+  const scheduled = formatResearchAutomationReport({
+    dryRun: false,
+    discovered: 1,
+    rejected: 0,
+    reviewCandidates: 0,
+    eligible: 1,
+    existing: 0,
+    englishDraftsCreated: 1,
+    enrichedSuccessfully: 1,
+    enrichmentFailed: 0,
+    hebrewDraftsCreated: 0,
+    translationFailed: 0,
+    published: 0,
+    withheldByLimit: 0,
+    studies: [],
+  });
+  assert.equal(scheduled.includes("Mode: manual full automation"), false);
+  assert.match(scheduled, /Discovered: 1/);
+  assert.equal(scheduled.includes("\nDeferred:"), false);
+});
+
 test("editorial locks use the schema statuses and the pipeline cannot publish", () => {
   const reviewedStatuses: readonly string[] = HUMAN_REVIEWED_EDITORIAL_STATUSES;
   assert.equal(reviewedStatuses.includes("ready"), true);

@@ -6,6 +6,10 @@ name: Research Discovery
 # workflow_dispatch dry-run remains the default and writes nothing.
 # A manual write (dry-run unchecked) still creates English drafts only, with no cap,
 # and does not enrich or translate.
+# Manual full automation is separate. It runs only when run_full_automation is true
+# and confirm_automation is exactly RUN AUTOMATION. It calls the same research:automate
+# runner as the schedule, creates drafts only, and never publishes.
+# The discovery dry_run input is not applied to that mode.
 on:
   workflow_dispatch:
     inputs:
@@ -18,6 +22,21 @@ on:
         type: string
         required: false
         default: "14"
+      run_full_automation:
+        description: "Run the full Research automation pipeline: Discovery → English draft → AI enrichment + SEO → Hebrew draft. Leave unchecked to keep the existing Research Discovery behavior."
+        type: boolean
+        required: false
+        default: false
+      max_creates:
+        description: "Full automation only. Maximum new studies to draft in this run, from 1 to 10. The first smoke test should use 1. Ignored unless full automation is checked."
+        type: number
+        required: false
+        default: 1
+      confirm_automation:
+        description: "Full automation only. Type RUN AUTOMATION to allow the run. Any other value stops before a Sanity write. Leave empty for Research Discovery."
+        type: string
+        required: false
+        default: ""
   schedule:
     # Monday and Thursday 08:00 UTC. Creates at most 10 unpublished drafts, then enriches and translates them.
     - cron: "0 8 * * 1,4"
@@ -57,12 +76,34 @@ jobs:
           # True only for a manual run with dry-run explicitly disabled.
           # Scheduled runs use the draft pipeline instead of this flag.
           WRITE_DRAFTS: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.dry_run == false || github.event.inputs.dry_run == 'false') }}
+          RUN_FULL_AUTOMATION: ${{ github.event.inputs.run_full_automation }}
+          MAX_CREATES: ${{ github.event.inputs.max_creates }}
+          CONFIRM_AUTOMATION: ${{ github.event.inputs.confirm_automation }}
         run: |
           echo "Only AUTO_DRAFT records can create Sanity drafts. REVIEW_CANDIDATE records are never written."
           echo "Published: 0"
           if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
             echo "Mode: scheduled draft pipeline. At most 10 new English drafts, then enrichment and Hebrew drafts. Nothing is published."
             npm run research:automate -- --max-creates=10
+          elif [ "$RUN_FULL_AUTOMATION" = "true" ]; then
+            # Reject before npm so the automation runner never starts and nothing is written.
+            if [ "$CONFIRM_AUTOMATION" != "RUN AUTOMATION" ]; then
+              echo "Invalid confirmation. Manual full automation requires confirm_automation to be exactly: RUN AUTOMATION"
+              echo "The confirmation was invalid, so this run stopped before any Sanity write."
+              echo "Published: 0"
+              exit 1
+            fi
+            # Integers 1–10 only. Leading zeros are rejected so bash cannot treat 08 as octal.
+            if ! [[ "$MAX_CREATES" =~ ^[1-9][0-9]?$ ]] || [ "$MAX_CREATES" -gt 10 ]; then
+              echo "Invalid max_creates. Manual full automation requires an integer from 1 to 10. Received: ${MAX_CREATES-<empty>}"
+              echo "This run stopped before any Sanity write."
+              echo "Published: 0"
+              exit 1
+            fi
+            echo "Mode: manual full automation"
+            echo "Max creates: $MAX_CREATES"
+            echo "Discovery dry-run is not used. This mode creates unpublished drafts through the existing automation runner and does not publish."
+            RESEARCH_AUTOMATION_MODE=manual npm run research:automate -- --max-creates="$MAX_CREATES"
           elif [ "$WRITE_DRAFTS" = "true" ]; then
             echo "Mode: create Sanity drafts (manual opt-in). Enrichment and Hebrew translation are not run."
             npm run research:discover
