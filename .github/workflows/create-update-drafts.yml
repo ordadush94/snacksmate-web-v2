@@ -1,0 +1,69 @@
+name: Create Update Drafts
+
+# SAFETY: manual only. There is no schedule.
+# Dry-run is the default and performs zero Sanity mutations.
+# A write is possible only when dry_run is false AND confirm_write is exactly CREATE UPDATE DRAFTS.
+# The script creates unpublished article drafts whose ids already start with drafts.
+# It never publishes and never creates a public article id.
+# Reruns skip an existing id, slug, translation slug, or title match.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Preview the Update drafts without writing to Sanity
+        type: boolean
+        default: true
+      confirm_write:
+        description: Type CREATE UPDATE DRAFTS to allow writing
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  create-update-drafts:
+    name: Create Update drafts
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create Update drafts
+        env:
+          NEXT_PUBLIC_SANITY_PROJECT_ID: 8wc8eouj
+          NEXT_PUBLIC_SANITY_DATASET: production
+          SANITY_WRITE_TOKEN: ${{ secrets.SANITY_WRITE_TOKEN }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+          CONFIRM_WRITE: ${{ github.event.inputs.confirm_write }}
+        run: |
+          echo "Create Update Drafts is manual. It never publishes."
+          if [ "$DRY_RUN" = "false" ]; then
+            if [ "$CONFIRM_WRITE" != "CREATE UPDATE DRAFTS" ]; then
+              echo "Refusing to write. confirm_write must equal exactly: CREATE UPDATE DRAFTS"
+              echo "This run stopped before any Sanity mutation."
+              echo "Expected updates: 0"
+              echo "English drafts created: 0"
+              echo "Hebrew drafts created: 0"
+              echo "Skipped existing: 0"
+              echo "Failed: 0"
+              echo "Published: 0"
+              exit 1
+            fi
+            echo "Mode: write. Unpublished article drafts only. Every id must start with drafts."
+            npx tsx scripts/create-update-drafts.ts --write
+          else
+            echo "Mode: dry-run. No Sanity documents will be created, modified, or published."
+            npx tsx scripts/create-update-drafts.ts
+          fi
