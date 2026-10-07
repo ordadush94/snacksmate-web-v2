@@ -121,8 +121,8 @@ export const enContent: LandingContent = {
     navLabel: "Footer",
   },
   support: {
-    articlesHeading: "Latest articles",
-    articlesMore: "Learn more",
+    articlesHeading: "Latest Updates",
+    articlesMore: "View all updates",
     screenAlt: "Snacksmate screen showing short exercise snacks",
   },
   store: {

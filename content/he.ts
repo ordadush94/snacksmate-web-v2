@@ -119,8 +119,8 @@ export const heContent: LandingContent = {
     navLabel: "תחתית",
   },
   support: {
-    articlesHeading: "כתבות אחרונות",
-    articlesMore: "למידע נוסף",
+    articlesHeading: "עדכונים אחרונים",
+    articlesMore: "לכל העדכונים",
     screenAlt: "מסך Snacksmate עם נשנושי כושר קצרים",
   },
   store: {
