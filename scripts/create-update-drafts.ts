@@ -9,6 +9,9 @@
  *
  * --write uses client.create on ids that already start with drafts.
  * It never publishes, never calls createOrReplace, and skips an existing match.
+ *
+ * The run ends with the prepared draft count, drafts actually created,
+ * existing matches skipped, failures, and Published: 0.
  */
 
 import { createClient, type SanityClient } from "@sanity/client";
@@ -43,6 +46,45 @@ type ExistingArticle = {
 type CreatedDocument = {
   _id?: string;
 };
+
+export type UpdateDraftRunSummary = {
+  expectedUpdates: number;
+  englishDraftsCreated: number;
+  hebrewDraftsCreated: number;
+  skippedExisting: number;
+  failed: number;
+};
+
+export function formatUpdateDraftRunSummary(summary: UpdateDraftRunSummary): string {
+  return [
+    `Expected updates: ${summary.expectedUpdates}`,
+    `English drafts created: ${summary.englishDraftsCreated}`,
+    `Hebrew drafts created: ${summary.hebrewDraftsCreated}`,
+    `Skipped existing: ${summary.skippedExisting}`,
+    `Failed: ${summary.failed}`,
+    "Published: 0",
+  ].join("\n");
+}
+
+function emptySummary(): UpdateDraftRunSummary {
+  return {
+    expectedUpdates: updateDrafts.length,
+    englishDraftsCreated: 0,
+    hebrewDraftsCreated: 0,
+    skippedExisting: 0,
+    failed: 0,
+  };
+}
+
+function printSummary(summary: UpdateDraftRunSummary): void {
+  console.log("");
+  console.log(formatUpdateDraftRunSummary(summary));
+}
+
+function invokedAsCli(): boolean {
+  const entry = process.argv[1] ?? "";
+  return entry.endsWith("/create-update-drafts.ts") || entry.endsWith("\\create-update-drafts.ts");
+}
 
 function publishedId(id: string): string {
   return id.replace(/^drafts\./, "");
@@ -113,16 +155,18 @@ async function createDraft(client: SanityClient, document: UpdateDraft): Promise
   }
 }
 
-async function main(): Promise<void> {
+async function run(summary: UpdateDraftRunSummary): Promise<void> {
   const write = process.argv.includes("--write");
   const unexpected = process.argv.slice(2).filter((arg) => arg !== "--write");
   if (unexpected.length > 0) {
+    summary.failed += 1;
     throw new Error(`Unknown argument: ${unexpected.join(", ")}. Pass --write to create drafts. The default is dry-run.`);
   }
 
   console.log(formatUpdateDraftReport());
   const validation = validateUpdateDrafts();
   if (validation.errors.length > 0) {
+    summary.failed += validation.errors.length;
     throw new Error("Draft validation failed. Nothing was written.");
   }
 
@@ -132,6 +176,7 @@ async function main(): Promise<void> {
     console.log("SANITY_WRITE_TOKEN is not set. Draft collision checks and creation were not run.");
     console.log("Nothing was written. Nothing was published.");
     if (write) {
+      summary.failed += 1;
       throw new Error("Refusing --write without SANITY_WRITE_TOKEN.");
     }
     return;
@@ -153,6 +198,7 @@ async function main(): Promise<void> {
   for (const document of updateDrafts) {
     const match = collision(document, existing);
     if (match) {
+      summary.skippedExisting += 1;
       console.log(`Skip ${document._id}: ${match}`);
       continue;
     }
@@ -169,20 +215,37 @@ async function main(): Promise<void> {
   for (const document of pending) {
     try {
       await createDraft(client, document);
+      if (document.language === "en") summary.englishDraftsCreated += 1;
+      else summary.hebrewDraftsCreated += 1;
       console.log(`Created draft ${document._id}`);
     } catch (error) {
       if (isConflict(error)) {
+        summary.skippedExisting += 1;
         console.log(`Skip ${document._id}: create conflict`);
         continue;
       }
+      summary.failed += 1;
       throw error;
     }
   }
   console.log("Done. No document was published.");
 }
 
-main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(message);
-  process.exitCode = 1;
-});
+async function main(): Promise<number> {
+  const summary = emptySummary();
+  try {
+    await run(summary);
+  } catch (error) {
+    if (summary.failed === 0) summary.failed += 1;
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(message);
+  }
+  printSummary(summary);
+  return summary.failed > 0 ? 1 : 0;
+}
+
+if (invokedAsCli()) {
+  main().then((code) => {
+    process.exitCode = code;
+  });
+}
