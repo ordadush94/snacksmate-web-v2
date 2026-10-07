@@ -12,14 +12,14 @@ const copy = {
     body: "The link may be old, or the page may have moved.",
     home: "Home",
     research: "Research",
-    articles: "Articles",
+    articles: "Updates",
   },
   he: {
     title: "העמוד הזה לא נמצא.",
     body: "יכול להיות שהקישור ישן, או שהעמוד עבר.",
     home: "בית",
     research: "מחקרים",
-    articles: "כתבות",
+    articles: "עדכונים",
   },
 } as const;
 

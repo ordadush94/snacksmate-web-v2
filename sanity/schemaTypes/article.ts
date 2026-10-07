@@ -9,6 +9,12 @@ const LANGUAGE_OPTIONS = [
 ] as const
 
 const TOPIC_OPTIONS = [
+  {title: 'Product Update', value: 'product-update'},
+  {title: 'New Feature', value: 'new-feature'},
+  {title: 'Release', value: 'release'},
+  {title: 'Partnership', value: 'partnership'},
+  {title: 'Research Collaboration', value: 'research-collaboration'},
+  {title: 'Company News', value: 'company-news'},
   {title: 'Exercise Snacks', value: 'exercise-snacks'},
   {title: 'Research', value: 'research'},
   {title: 'Fitness', value: 'fitness'},
@@ -29,6 +35,8 @@ export const articleType = defineType({
   title: 'Article',
   type: 'document',
   icon: DocumentTextIcon,
+  description:
+    'Shown on the public site as a Snacksmate Update: product news, features, releases, partnerships, and company milestones. The document type stays article.',
   fields: [
     defineField({
       name: 'title',
@@ -63,7 +71,7 @@ export const articleType = defineType({
       title: 'Short description',
       type: 'text',
       rows: 3,
-      description: 'Short summary of the article, around 160–300 characters.',
+      description: 'Short summary shown with the update, around 160–300 characters.',
       validation: (rule) =>
         rule
           .required()
@@ -89,7 +97,7 @@ export const articleType = defineType({
     }),
     defineField({
       name: 'body',
-      title: 'Article body',
+      title: 'Body',
       type: 'array',
       of: [
         defineArrayMember({
@@ -133,8 +141,10 @@ export const articleType = defineType({
     }),
     defineField({
       name: 'topic',
-      title: 'Topic',
+      title: 'Category',
       type: 'string',
+      description:
+        'Public update category. Older topic values stay in this list and are not removed.',
       options: {
         list: [...TOPIC_OPTIONS],
         layout: 'dropdown',
@@ -247,7 +257,7 @@ export const articleType = defineType({
       title: 'Translation slug',
       type: 'string',
       description:
-        'Used later to associate Hebrew and English versions of the same article.',
+        'Used later to associate Hebrew and English versions of the same update.',
     }),
     defineField({
       name: 'translationSourceId',
@@ -312,7 +322,7 @@ export const articleType = defineType({
         : undefined
 
       return {
-        title: title || 'Untitled article',
+        title: title || 'Untitled update',
         subtitle: [languageLabel, topicLabel, publishedLabel]
           .filter(Boolean)
           .join(' · '),

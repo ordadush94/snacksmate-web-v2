@@ -29,7 +29,7 @@ export function ArticleCard({ article, locale }: ArticleCardProps) {
       title={article.title}
       linkLabel={copy.readArticle}
       takeaway={article.excerpt}
-      kicker={topic}
+      chips={topic ? [topic] : undefined}
       image={
         imageUrl
           ? {
@@ -41,12 +41,9 @@ export function ArticleCard({ article, locale }: ArticleCardProps) {
           : undefined
       }
       meta={
-        <>
-          <time dateTime={article.publishedAt}>
-            {formatArticleDate(article.publishedAt, locale)}
-          </time>
-          {article.author ? ` · ${article.author}` : null}
-        </>
+        <time dateTime={article.publishedAt}>
+          {formatArticleDate(article.publishedAt, locale)}
+        </time>
       }
     />
   );

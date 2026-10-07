@@ -1,7 +1,5 @@
-import Link from "next/link";
 import type { Locale } from "@/content/types";
 import { getArticlesCopy } from "@/content/articles";
-import { researchPath } from "@/content/research";
 import type { ArticleListItem } from "@/sanity/lib/articles";
 import { PublicationShell } from "@/components/site/PublicationShell";
 import { ArticleCard } from "./ArticleCard";
@@ -24,10 +22,8 @@ export function ArticlesIndex({ locale, articles }: ArticlesIndexProps) {
         </header>
         {articles.length === 0 ? (
           <div className="content-empty" role="status">
-            <p>{copy.empty}</p>
-            <Link className="text-link" href={researchPath(locale)}>
-              {copy.emptyAction}
-            </Link>
+            <p>{copy.emptyTitle}</p>
+            <p>{copy.emptyBody}</p>
           </div>
         ) : (
           <div className="content-list">

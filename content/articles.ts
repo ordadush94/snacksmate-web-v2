@@ -1,6 +1,15 @@
 import type { Locale } from "./types";
 
 const TOPIC_LABELS: Record<string, Record<Locale, string>> = {
+  "product-update": { en: "Product Update", he: "עדכון מוצר" },
+  "new-feature": { en: "New Feature", he: "פיצ'ר חדש" },
+  release: { en: "Release", he: "גרסה חדשה" },
+  partnership: { en: "Partnership", he: "שיתוף פעולה" },
+  "research-collaboration": {
+    en: "Research Collaboration",
+    he: "שיתוף פעולה מחקרי",
+  },
+  "company-news": { en: "Company News", he: "חדשות Snacksmate" },
   "exercise-snacks": { en: "Exercise Snacks", he: "נשנושי כושר" },
   research: { en: "Research", he: "מחקר" },
   fitness: { en: "Fitness", he: "כושר" },
@@ -11,47 +20,46 @@ const TOPIC_LABELS: Record<string, Record<Locale, string>> = {
 
 export const articlesCopy = {
   en: {
-    navLabel: "Articles",
-    pageTitle: "Exercise Snacks, Research & Active Living",
+    navLabel: "Updates",
+    pageTitle: "Latest from Snacksmate",
     pageDescription:
-      "Practical guides from Snacksmate on exercise snacks, movement, and fitting activity into a real day.",
-    empty:
-      "New practical guides and explainers about exercise snacks are on the way.",
-    emptyAction: "Explore the research",
-    readArticle: "Read article",
+      "New features, product updates, partnerships and what we're building.",
+    emptyTitle: "Updates are on the way.",
+    emptyBody: "Follow the latest developments from Snacksmate.",
+    readArticle: "Read update",
     publishedLabel: "Published",
     updatedLabel: "Updated",
     referencesHeading: "References",
-    backToArticles: "Back to all articles",
+    backToArticles: "Back to Updates",
     homeLabel: "Home",
     breadcrumbLabel: "Breadcrumb",
-    relatedHeading: "More from Snacksmate",
+    relatedHeading: "More updates",
     relatedResearchHeading: "Related research",
     appCta: "Try a few minutes in Snacksmate",
-    metaTitle: "Snacksmate Articles – Exercise Snacks, Research & Active Living",
+    metaTitle: "Snacksmate Updates – New Features, Product News & Partnerships",
     metaDescription:
-      "Articles from Snacksmate on exercise snacks, movement research, and active living — short ways to move more through a busy day.",
+      "New features, product updates, partnerships, and what Snacksmate is building.",
   },
   he: {
-    navLabel: "כתבות",
-    pageTitle: "נשנושי כושר, מחקרים ואורח חיים פעיל",
+    navLabel: "עדכונים",
+    pageTitle: "מה חדש ב־Snacksmate",
     pageDescription:
-      "מדריכים והסברים של Snacksmate על נשנושי כושר, תנועה וכושר ביום-יום.",
-    empty: "כתבות ומדריכים חדשים על נשנושי כושר יעלו כאן בקרוב.",
-    emptyAction: "למחקרים",
-    readArticle: "לקריאה",
+      "פיצ'רים חדשים, עדכוני מוצר, שיתופי פעולה ומה שאנחנו בונים.",
+    emptyTitle: "עדכונים חדשים יעלו בקרוב.",
+    emptyBody: "כאן תוכלו לעקוב אחרי ההתפתחויות האחרונות ב־Snacksmate.",
+    readArticle: "לקריאת העדכון",
     publishedLabel: "פורסם",
     updatedLabel: "עודכן",
     referencesHeading: "מקורות",
-    backToArticles: "חזרה לכל הכתבות",
+    backToArticles: "חזרה לעדכונים",
     homeLabel: "בית",
     breadcrumbLabel: "נתיב ניווט",
-    relatedHeading: "כתבות נוספות",
+    relatedHeading: "עדכונים נוספים",
     relatedResearchHeading: "מחקרים קשורים",
     appCta: "כמה דקות עם Snacksmate",
-    metaTitle: "כתבות Snacksmate – נשנושי כושר, מחקרים ואורח חיים פעיל",
+    metaTitle: "עדכוני Snacksmate – פיצ'רים חדשים, חדשות ושיתופי פעולה",
     metaDescription:
-      "כתבות Snacksmate על נשנושי כושר, מחקרי תנועה ואורח חיים פעיל — דרכים קצרות להוסיף תנועה ליום העמוס.",
+      "פיצ'רים חדשים, עדכוני מוצר, שיתופי פעולה ומה ש־Snacksmate בונה.",
   },
 } as const;
 

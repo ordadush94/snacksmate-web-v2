@@ -1380,6 +1380,7 @@ html[dir="rtl"] .icon-directional { transform: scaleX(-1); }
   max-width: 46ch;
 }
 .content-empty p { margin: 0 0 12px; }
+.content-empty p:last-child { margin-bottom: 0; }
 .research-toolbar {
   display: flex;
   flex-wrap: wrap;
