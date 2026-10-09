@@ -1,6 +1,7 @@
 import {
   assertServerSideImageCredentials,
   confirmationForRegenerationMode,
+  regenerationWriteRefusal,
   researchImageSize,
   resolveMaxImages,
   resolveRegenerationMode,
@@ -69,11 +70,7 @@ export async function runResearchImageBackfill(input: {
   const imageSize = researchImageSize(model);
   const requiredConfirm = confirmationForRegenerationMode(regenerationMode);
   if (!input.dryRun && input.confirm !== requiredConfirm) {
-    throw new Error(
-      regenerationMode === "ai_generated_only"
-        ? "Refusing to replace images. confirm_write must be exactly REGENERATE RESEARCH IMAGES. Nothing was generated or written."
-        : "Refusing to write. confirm_write must be exactly GENERATE RESEARCH IMAGES. Nothing was generated or written.",
-    );
+    throw new Error(regenerationWriteRefusal(regenerationMode));
   }
   if (!input.dryRun && (!input.uploadImage || !input.patchDocument)) {
     throw new Error("Refusing to write without Sanity upload and patch operations.");

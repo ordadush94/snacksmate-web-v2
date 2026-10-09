@@ -107,7 +107,9 @@ function planStudy(
   const canonicalRef = canonical ? imageAssetRef(canonical) : null;
   const provenance = studyProvenance(documents);
   const recordedPlan = provenance === "research-image-automation" ? recordedHistory(documents) : null;
-  const regenerationEligible = mode === "ai_generated_only" && provenance === "research-image-automation";
+  const regenerationEligible =
+    (mode === "ai_generated_only" && provenance === "research-image-automation") ||
+    (mode === "replace_existing" && Boolean(canonicalRef));
   const missingAsset = targets.filter((doc) => !imageAssetRef(doc));
   const action = studyAction(mode, canonicalRef, missingAsset.length, regenerationEligible);
   const patches = patchesFor(targets, brief, documents, action);
@@ -158,9 +160,13 @@ function reasonFor(
   mode: RegenerationMode,
 ): string {
   if (action === "withheld_by_max_images") return "max images";
+  if (action === "regenerate_image" && mode === "replace_existing") return "replace existing image";
   if (action === "regenerate_image") return "existing automated image";
   if (action === "generate_image") return "missing image";
   if (action === "reuse_existing_asset") return "existing image";
+  if (mode === "replace_existing" && provenance === "missing") {
+    return "replace mode ignores missing images";
+  }
   if (mode === "ai_generated_only" && provenance === "missing") {
     return "regeneration mode ignores missing images";
   }
@@ -209,6 +215,9 @@ function studyAction(
   missingAssets: number,
   regenerationEligible: boolean,
 ): StudyAction {
+  if (mode === "replace_existing") {
+    return canonicalRef ? "regenerate_image" : "skip_existing_image";
+  }
   if (mode === "ai_generated_only") {
     return regenerationEligible ? "regenerate_image" : "skip_existing_image";
   }
