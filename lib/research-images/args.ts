@@ -1,7 +1,9 @@
 import {
-  CONFIRM_RESEARCH_IMAGES,
+  confirmationForRegenerationMode,
   resolveMaxImages,
+  resolveRegenerationMode,
   resolveResearchImageScope,
+  type RegenerationMode,
   type ResearchImageScope,
 } from "./config";
 
@@ -9,6 +11,7 @@ export type ResearchImageArgs = {
   dryRun: boolean;
   scope: ResearchImageScope;
   maxImages: number | "ALL";
+  regenerationMode: RegenerationMode;
   confirm: string;
 };
 
@@ -17,6 +20,7 @@ export function parseResearchImageArgs(argv: readonly string[]): ResearchImageAr
   let dryRunFlag = false;
   let scope = "all_missing";
   let maxImages = "10";
+  let regenerationMode = "missing_only";
   let confirm = "";
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -47,6 +51,15 @@ export function parseResearchImageArgs(argv: readonly string[]): ResearchImageAr
       maxImages = arg.slice("--max-images=".length);
       continue;
     }
+    if (arg === "--regeneration-mode") {
+      regenerationMode = readValue(argv, index, "--regeneration-mode");
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--regeneration-mode=")) {
+      regenerationMode = arg.slice("--regeneration-mode=".length);
+      continue;
+    }
     if (arg === "--confirm") {
       confirm = readValue(argv, index, "--confirm");
       index += 1;
@@ -62,9 +75,12 @@ export function parseResearchImageArgs(argv: readonly string[]): ResearchImageAr
   if (write && dryRunFlag) {
     throw new Error("Pass either --dry-run or --write, not both.");
   }
-  if (write && confirm !== CONFIRM_RESEARCH_IMAGES) {
+  const mode = resolveRegenerationMode(regenerationMode);
+  if (write && confirm !== confirmationForRegenerationMode(mode)) {
     throw new Error(
-      "Refusing to write. confirm_write must be exactly GENERATE RESEARCH IMAGES. Nothing was generated or written.",
+      mode === "ai_generated_only"
+        ? "Refusing to replace images. confirm_write must be exactly REGENERATE RESEARCH IMAGES. Nothing was generated or written."
+        : "Refusing to write. confirm_write must be exactly GENERATE RESEARCH IMAGES. Nothing was generated or written.",
     );
   }
 
@@ -72,6 +88,7 @@ export function parseResearchImageArgs(argv: readonly string[]): ResearchImageAr
     dryRun: !write,
     scope: resolveResearchImageScope(scope),
     maxImages: resolveMaxImages(maxImages),
+    regenerationMode: mode,
     confirm,
   };
 }

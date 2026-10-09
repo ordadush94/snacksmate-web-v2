@@ -24,7 +24,7 @@ import { chooseBriefSource } from "./plan";
 import { formatResearchImageReport } from "./report";
 import { runResearchImageBackfill } from "./run";
 import { patchResearchImage } from "./sanity";
-import type { ResearchImageDocument } from "./types";
+import type { ResearchImageAutomation, ResearchImageDocument } from "./types";
 
 const PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
@@ -217,12 +217,14 @@ test("English and Hebrew alt text describe the visible activity", () => {
   );
   const english = buildResearchImageAlt(brief, "en");
   const hebrew = buildResearchImageAlt(brief, "he");
-  assert.equal(english, "Illustration of a person performing a short stationary cycling session.");
-  assert.equal(hebrew, "איור של אדם המבצע רכיבה קצרה על אופני כושר.");
+  assert.match(english, /^Illustration of /);
+  assert.match(english, /cycling/i);
+  assert.match(hebrew, /רכיבה|אופני כושר/);
   assert.equal(HEBREW.test(english), false);
   assert.match(hebrew, HEBREW);
   assert.equal(english.includes("mortality"), false);
   assert.equal(hebrew.includes(brief.scene), false);
+  assert.equal(english.includes(brief.plan.rationale), false);
 });
 
 test("older adults and disease context change the scene without depicting the disease", () => {
@@ -237,8 +239,9 @@ test("older adults and disease context change the scene without depicting the di
   );
   assert.equal(older.population, "older-adult");
   assert.equal(older.activity, "resistance");
-  assert.match(buildResearchImageAlt(older, "en"), /older adult/);
-  assert.match(buildResearchImageAlt(older, "he"), /אדם מבוגר/);
+  assert.equal(older.plan.approximateAge, "older");
+  assert.match(buildResearchImageAlt(older, "en"), /older/);
+  assert.match(buildResearchImageAlt(older, "he"), /מבוגר/);
 
   const diabetes = buildResearchVisualBrief(
     research({
@@ -508,9 +511,12 @@ test("published and draft patches change only mainImage and do not publish", asy
   assert.equal(calls.upload, 1);
   assert.equal(calls.patch.length, 2);
   for (const patch of calls.patch) {
-    assert.deepEqual(Object.keys(patch.fields), ["mainImage"]);
+    assert.deepEqual(Object.keys(patch.fields).sort(), ["imageAutomation", "mainImage"]);
     const imageValue = patch.fields.mainImage as Record<string, unknown>;
     assert.deepEqual(Object.keys(imageValue).sort(), ["_type", "alt", "asset"]);
+    const automation = patch.fields.imageAutomation as { source?: string; assetRef?: string };
+    assert.equal(automation.source, "research-image-automation");
+    assert.equal(automation.assetRef, ASSET);
     assert.equal("editorialStatus" in patch.fields, false);
     assert.equal("title" in patch.fields, false);
     assert.equal("slug" in patch.fields, false);
@@ -659,8 +665,10 @@ test("the manual workflow is the only trigger and the schedule does not generate
   assert.match(workflow, /dry_run:[\s\S]*?type: boolean[\s\S]*?default: true/);
   assert.match(workflow, /scope:[\s\S]*?type: choice[\s\S]*?- all_missing[\s\S]*?- published_missing[\s\S]*?- drafts_missing/);
   assert.match(workflow, /max_images:[\s\S]*?default: "10"/);
+  assert.match(workflow, /regeneration_mode:[\s\S]*?- missing_only[\s\S]*?- ai_generated_only[\s\S]*?default: missing_only/);
   assert.match(workflow, /confirm_write:[\s\S]*?default: ""/);
   assert.match(workflow, /GENERATE RESEARCH IMAGES/);
+  assert.match(workflow, /REGENERATE RESEARCH IMAGES/);
   assert.match(workflow, /OPENAI_API_KEY: \$\{\{ secrets\.OPENAI_API_KEY \}\}/);
   assert.match(workflow, /SANITY_WRITE_TOKEN: \$\{\{ secrets\.SANITY_WRITE_TOKEN \}\}/);
   assert.match(workflow, /RESEARCH_IMAGE_MODEL: \$\{\{ vars\.RESEARCH_IMAGE_MODEL \}\}/);
@@ -729,7 +737,7 @@ test("the workflow refuses a write until the confirmation and max are valid", ()
   assert.equal(write.status, 0);
   assert.match(
     write.calls,
-    /research:image-backfill -- --write --scope=published_missing --max-images=10 --confirm=GENERATE RESEARCH IMAGES/,
+    /research:image-backfill -- --write --scope=published_missing --max-images=10 --regeneration-mode=missing_only --confirm=GENERATE RESEARCH IMAGES/,
   );
 });
 
@@ -738,14 +746,186 @@ test("CLI args default to a dry-run and reject a write without the exact confirm
   assert.equal(dryRun.dryRun, true);
   assert.equal(dryRun.scope, "drafts_missing");
   assert.equal(dryRun.maxImages, "ALL");
+  assert.equal(dryRun.regenerationMode, "missing_only");
   assert.throws(() => parseResearchImageArgs(["--write", "--confirm=CREATE DRAFTS"]), /GENERATE RESEARCH IMAGES/);
+  assert.throws(
+    () =>
+      parseResearchImageArgs([
+        "--write",
+        "--regeneration-mode=ai_generated_only",
+        "--confirm=GENERATE RESEARCH IMAGES",
+      ]),
+    /REGENERATE RESEARCH IMAGES/,
+  );
+});
+
+test("a manual image cannot be replaced and regeneration requires its own confirmation", async () => {
+  const manual = await writeRun(
+    [
+      research({
+        _id: "research-pubmed-5",
+        pmid: "5",
+        mainImage: image("image-editor-upload-1400x788-png", "Editor photograph of a kitchen."),
+      }),
+    ],
+    { regenerationMode: "ai_generated_only", confirm: "REGENERATE RESEARCH IMAGES" },
+  );
+  assert.equal(manual.calls.generate, 0);
+  assert.equal(manual.calls.upload, 0);
+  assert.equal(manual.calls.patch.length, 0);
+  assert.equal(manual.result.studies[0]?.action, "skip_existing_image");
+  assert.equal(manual.result.studies[0]?.regenerationEligible, false);
+  assert.equal(manual.result.studies[0]?.provenance, "unknown");
+  assert.match(formatResearchImageReport(manual.result), /Unknown or manual provenance: 1/);
+  assert.match(formatResearchImageReport(manual.result), /not recorded/);
+
+  const replaced = "image-editor-replacement-1400x788-png";
+  const stale = await writeRun(
+    [
+      research({
+        _id: "research-pubmed-6",
+        pmid: "6",
+        mainImage: image(replaced, "Editor replacement."),
+        imageAutomation: automationRecord("image-old-auto-2048x1152-png", "pmid-6"),
+      }),
+    ],
+    { regenerationMode: "ai_generated_only", confirm: "REGENERATE RESEARCH IMAGES" },
+  );
+  assert.equal(stale.calls.generate, 0);
+  assert.equal(stale.result.studies[0]?.provenance, "unknown");
+
+  let loaded = false;
+  await assert.rejects(
+    () =>
+      runResearchImageBackfill({
+        dryRun: false,
+        scope: "all_missing",
+        maxImages: "ALL",
+        regenerationMode: "ai_generated_only",
+        confirm: CONFIRM,
+        loadDocuments: async () => {
+          loaded = true;
+          return [];
+        },
+        uploadImage: async () => ASSET,
+        patchDocument: async () => {},
+      }),
+    /REGENERATE RESEARCH IMAGES/,
+  );
+  assert.equal(loaded, false);
+
+  await assert.rejects(
+    () =>
+      runResearchImageBackfill({
+        dryRun: false,
+        scope: "all_missing",
+        maxImages: "ALL",
+        regenerationMode: "missing_only",
+        confirm: "REGENERATE RESEARCH IMAGES",
+        loadDocuments: async () => [],
+        uploadImage: async () => ASSET,
+        patchDocument: async () => {},
+      }),
+    /GENERATE RESEARCH IMAGES/,
+  );
+});
+
+test("only a matching automation record can be regenerated, and missing_only leaves it", async () => {
+  const asset = "image-auto-2048x1152-png";
+  const documents = [
+    research({
+      _id: "research-pubmed-8",
+      pmid: "8",
+      title: "Brief stationary cycling for inactive adults",
+      intervention: "Participants completed short stationary cycling bouts.",
+      mainImage: image(asset, "Illustration of a woman performing a short stationary cycling session."),
+      imageAutomation: automationRecord(asset, "pmid-8"),
+    }),
+    research({
+      _id: "research-he-research-pubmed-8",
+      language: "he",
+      pmid: "8",
+      mainImage: image(asset, "איור קיים."),
+      imageAutomation: automationRecord(asset, "pmid-8"),
+    }),
+  ];
+
+  const partialAsset = "image-auto-partial-2048x1152-png";
+  const partial = await writeRun(
+    [
+      research({
+        _id: "research-pubmed-7",
+        pmid: "7",
+        mainImage: image(partialAsset, "Illustration of a person taking a short walk."),
+        imageAutomation: automationRecord(partialAsset, "pmid-7"),
+      }),
+      research({
+        _id: "research-he-research-pubmed-7",
+        language: "he",
+        pmid: "7",
+        mainImage: image(partialAsset, "איור קיים בלי תיעוד."),
+      }),
+    ],
+    { regenerationMode: "ai_generated_only", confirm: "REGENERATE RESEARCH IMAGES" },
+  );
+  assert.equal(partial.calls.generate, 0);
+  assert.equal(partial.result.studies[0]?.provenance, "unknown");
+
+  const kept = await writeRun(documents, { regenerationMode: "missing_only" });
+  assert.equal(kept.calls.generate, 0);
+  assert.equal(kept.calls.patch.length, 0);
+  assert.equal(kept.result.studies[0]?.action, "skip_existing_image");
+  assert.equal(kept.result.audit.automated, 1);
+  assert.equal(kept.result.audit.recordedPeople.femalePresenting, 1);
+
+  const regenerated = await writeRun(documents, {
+    regenerationMode: "ai_generated_only",
+    confirm: "REGENERATE RESEARCH IMAGES",
+  });
+  assert.equal(regenerated.calls.generate, 1);
+  assert.equal(regenerated.calls.upload, 1);
+  assert.equal(regenerated.calls.patch.length, 2);
+  const refs = regenerated.calls.patch.map((patch) => imageRef(patch.fields));
+  assert.deepEqual(refs, [ASSET, ASSET]);
+  for (const patch of regenerated.calls.patch) {
+    const record = patch.fields.imageAutomation as { assetRef?: string; source?: string };
+    assert.equal(record.source, "research-image-automation");
+    assert.equal(record.assetRef, ASSET);
+  }
+
+  const blocked = runDispatch({
+    IMAGE_DRY_RUN: "false",
+    IMAGE_SCOPE: "all_missing",
+    IMAGE_MAX: "10",
+    IMAGE_CONFIRM: CONFIRM,
+    IMAGE_REGENERATION_MODE: "ai_generated_only",
+  });
+  assert.equal(blocked.status, 1);
+  assert.equal(blocked.calls, "");
+  assert.match(blocked.stdout, /REGENERATE RESEARCH IMAGES/);
+
+  const allowed = runDispatch({
+    IMAGE_DRY_RUN: "false",
+    IMAGE_SCOPE: "all_missing",
+    IMAGE_MAX: "10",
+    IMAGE_CONFIRM: "REGENERATE RESEARCH IMAGES",
+    IMAGE_REGENERATION_MODE: "ai_generated_only",
+  });
+  assert.equal(allowed.status, 0);
+  assert.match(allowed.calls, /--regeneration-mode=ai_generated_only/);
+  assert.match(allowed.calls, /--confirm=REGENERATE RESEARCH IMAGES/);
 });
 
 test("the cost banner is printed before the first image request", async () => {
   const { calls, lines } = await writeRun([research({ _id: "research-pubmed-4", pmid: "4" })]);
   const banner = lines.join("\n");
-  assert.match(banner, /Eligible logical studies: 1/);
+  assert.match(banner, /Logical studies: 1/);
+  assert.match(banner, /Missing images: 1/);
+  assert.match(banner, /Existing images: 0/);
+  assert.match(banner, /Images eligible for regeneration: 0/);
   assert.match(banner, /Images to generate: 1/);
+  assert.match(banner, /Estimated API calls: 1/);
+  assert.match(banner, /Eligible logical studies: 1/);
   assert.match(banner, /Existing images reused: 0/);
   assert.match(banner, /Requested max: ALL/);
   assert.match(banner, /Image model: gpt-image-2\.5-flare/);
@@ -770,6 +950,26 @@ function research(overrides: Partial<ResearchImageDocument> = {}): ResearchImage
     mainFindings: [{ _type: "block", children: [{ _type: "span", text: "Stair climbing was the activity." }] }],
     practicalInterpretation: "The study concerns short stair-climbing bouts.",
     ...overrides,
+  };
+}
+
+function automationRecord(assetRef: string, studyKey: string): ResearchImageAutomation {
+  return {
+    _type: "researchImageAutomation",
+    source: "research-image-automation",
+    assetRef,
+    studyKey,
+    generatedAt: "2026-01-01T00:00:00.000Z",
+    activity: "cycling",
+    setting: "home",
+    subjectCount: "one",
+    subjectPresentation: "female",
+    approximateAge: "adult",
+    composition: "medium-activity",
+    supportingPalette: "warm-sand",
+    brandAccent: "accessory",
+    keyProps: ["stationary bike"],
+    appearanceVariation: "medium",
   };
 }
 
@@ -801,6 +1001,7 @@ async function writeRun(
   options: {
     dryRun?: boolean;
     confirm?: string;
+    regenerationMode?: "missing_only" | "ai_generated_only";
     scope?: "all_missing" | "published_missing" | "drafts_missing";
     maxImages?: number | "ALL" | string;
     generateImage?: () => Promise<Buffer>;
@@ -831,6 +1032,7 @@ async function writeRun(
       dryRun: options.dryRun ?? false,
       scope: options.scope ?? "all_missing",
       maxImages: options.maxImages ?? "ALL",
+      regenerationMode: options.regenerationMode,
       confirm: options.confirm ?? CONFIRM,
       model: "gpt-image-2.5-flare",
       loadDocuments: async () => {

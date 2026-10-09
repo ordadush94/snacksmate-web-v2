@@ -1,5 +1,6 @@
 import { assertAllowlistedImagePatch, materializeImagePatch } from "./patch";
 import { assertAssetRef, assertImageBytes } from "./generate";
+import { parseImageAutomation } from "./provenance";
 import type { ImagePatchPlan, ResearchImageDocument } from "./types";
 
 export const RESEARCH_IMAGE_DOCUMENTS_QUERY = `*[_type == "research"]{
@@ -24,6 +25,23 @@ export const RESEARCH_IMAGE_DOCUMENTS_QUERY = `*[_type == "research"]{
     hotspot,
     crop,
     asset
+  },
+  imageAutomation{
+    _type,
+    source,
+    assetRef,
+    studyKey,
+    generatedAt,
+    activity,
+    setting,
+    subjectCount,
+    subjectPresentation,
+    approximateAge,
+    composition,
+    supportingPalette,
+    brandAccent,
+    keyProps,
+    appearanceVariation
   }
 }`;
 
@@ -142,6 +160,7 @@ export function parseResearchImageDocument(value: unknown): ResearchImageDocumen
     translationSourceId: optionalString(row.translationSourceId),
     translationSlug: optionalString(row.translationSlug),
     mainImage: parseMainImage(row.mainImage),
+    imageAutomation: parseImageAutomation(row.imageAutomation),
   };
 }
 

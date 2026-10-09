@@ -51,6 +51,7 @@ const INTERNAL_FIELDS = [
   "importSource",
   "importedAt",
   "sourceQueries",
+  "imageAutomation",
 ];
 
 test("editorial filters select the intended research documents", () => {
@@ -232,6 +233,7 @@ test("editorial fields stay on the internal review group", () => {
   assert.equal(fields.importedAt?.group, "editorial");
   assert.equal(fields.sourceQueries?.group, "editorial");
   assert.equal(fields.automationNote?.group, "editorial");
+  assert.equal(fields.imageAutomation?.group, "editorial");
   assert.equal(fields.title?.group, "basic");
   assert.equal(fields.editorialChecklist, undefined);
 

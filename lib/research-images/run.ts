@@ -1,8 +1,9 @@
 import {
   assertServerSideImageCredentials,
-  CONFIRM_RESEARCH_IMAGES,
+  confirmationForRegenerationMode,
   researchImageSize,
   resolveMaxImages,
+  resolveRegenerationMode,
   resolveResearchImageModel,
   resolveResearchImageScope,
 } from "./config";
@@ -12,14 +13,18 @@ import {
   requestResearchCoverImage,
   reviewResearchCoverImage,
 } from "./generate";
+import { buildResearchImageAudit } from "./audit";
 import { planResearchImages } from "./plan";
 import { publicationState } from "./group";
+import { imageAutomationFromPlan, matchingAutomation } from "./provenance";
+import { assertAllowlistedImagePatch } from "./patch";
 import { fieldsForImagePatch, researchImageFilename } from "./sanity";
 import type {
   ImageGenerationRequest,
   ImageReview,
   ImageReviewRequest,
   PlannedStudy,
+  ResearchImageAutomation,
   ResearchImageBackfillResult,
   ResearchImageDocument,
   StudyPatchResult,
@@ -42,6 +47,7 @@ export async function runResearchImageBackfill(input: {
   dryRun: boolean;
   scope: string;
   maxImages: number | "ALL" | string;
+  regenerationMode?: string;
   confirm?: string;
   model?: string;
   qaModel?: string;
@@ -53,15 +59,20 @@ export async function runResearchImageBackfill(input: {
   reviewImage?: (request: ImageReviewRequest) => Promise<ImageReview>;
   fetchImpl?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
+  now?: () => Date;
 }): Promise<ResearchImageBackfillResult> {
   assertServerSideImageCredentials();
   const scope = resolveResearchImageScope(input.scope);
   const maxImages = resolveMaxImages(input.maxImages);
+  const regenerationMode = resolveRegenerationMode(input.regenerationMode);
   const model = resolveResearchImageModel(input.model);
   const imageSize = researchImageSize(model);
-  if (!input.dryRun && input.confirm !== CONFIRM_RESEARCH_IMAGES) {
+  const requiredConfirm = confirmationForRegenerationMode(regenerationMode);
+  if (!input.dryRun && input.confirm !== requiredConfirm) {
     throw new Error(
-      "Refusing to write. confirm_write must be exactly GENERATE RESEARCH IMAGES. Nothing was generated or written.",
+      regenerationMode === "ai_generated_only"
+        ? "Refusing to replace images. confirm_write must be exactly REGENERATE RESEARCH IMAGES. Nothing was generated or written."
+        : "Refusing to write. confirm_write must be exactly GENERATE RESEARCH IMAGES. Nothing was generated or written.",
     );
   }
   if (!input.dryRun && (!input.uploadImage || !input.patchDocument)) {
@@ -69,19 +80,23 @@ export async function runResearchImageBackfill(input: {
   }
 
   const documents = await input.loadDocuments();
-  const plans = planResearchImages(documents, { scope, maxImages });
+  const plans = planResearchImages(documents, { scope, maxImages, regenerationMode });
+  const audit = buildResearchImageAudit(plans);
   const qaModel = input.qaModel?.trim() || "gpt-5.6-luna";
   let imageApiCalls = 0;
   let sanityMutations = 0;
+  const now = input.now ?? (() => new Date());
 
   if (input.dryRun) {
     return {
       dryRun: true,
       scope,
+      regenerationMode,
       maxImages,
       model,
       imageSize,
       studies: plans.map((plan) => describePlan(plan, "planned")),
+      audit,
       imageApiCalls: 0,
       sanityMutations: 0,
     };
@@ -92,10 +107,13 @@ export async function runResearchImageBackfill(input: {
     maxImages,
     model,
     imageSize,
+    regenerationMode,
   });
   console.log(banner);
 
-  const generations = plans.filter((plan) => plan.action === "generate_image").length;
+  const generations = plans.filter(
+    (plan) => plan.action === "generate_image" || plan.action === "regenerate_image",
+  ).length;
   if (generations > 0 && !input.generateImage && !input.apiKey?.trim()) {
     throw new Error("OPENAI_API_KEY must be set before image generation. Nothing was written.");
   }
@@ -147,7 +165,7 @@ export async function runResearchImageBackfill(input: {
     }
 
     let assetRef = plan.canonicalAssetRef;
-    if (plan.action === "generate_image") {
+    if (plan.action === "generate_image" || plan.action === "regenerate_image") {
       try {
         imageApiCalls += 1;
         const bytes = await generateImage({
@@ -174,6 +192,7 @@ export async function runResearchImageBackfill(input: {
     }
 
     const patches: StudyPatchResult[] = [];
+    const automation = automationForPlan(plan, assetRef, now().toISOString());
     for (const patch of plan.patches) {
       try {
         if (patch.kind === "image" && !assetRef) {
@@ -184,6 +203,8 @@ export async function runResearchImageBackfill(input: {
           hotspot: plan.hotspot,
           crop: plan.crop,
         });
+        if (automation) fields.imageAutomation = automation;
+        assertAllowlistedImagePatch(fields);
         await patchDocument(patch.id, fields);
         sanityMutations += 1;
         patches.push({ ...patch, status: "patched" });
@@ -194,30 +215,55 @@ export async function runResearchImageBackfill(input: {
       }
     }
 
+    const generated = plan.action === "generate_image" || plan.action === "regenerate_image";
     studies.push({
-      ...describePlan(plan, plan.action === "generate_image" ? "generated" : "skipped"),
+      ...describePlan(plan, generated ? "generated" : "skipped"),
       assetRef,
       patches,
-      imageGeneration: plan.action === "generate_image" ? "generated" : "skipped",
+      imageGeneration: generated ? "generated" : "skipped",
     });
   }
 
   return {
     dryRun: false,
     scope,
+    regenerationMode,
     maxImages,
     model,
     imageSize,
     studies,
+    audit,
     imageApiCalls,
     sanityMutations,
   };
+}
+
+function automationForPlan(
+  plan: PlannedStudy,
+  assetRef: string | null,
+  generatedAt: string,
+): ResearchImageAutomation | null {
+  if (!assetRef) return null;
+  if (plan.action === "generate_image" || plan.action === "regenerate_image") {
+    return imageAutomationFromPlan({
+      plan: plan.brief.plan,
+      assetRef,
+      studyKey: plan.key,
+      generatedAt,
+    });
+  }
+  for (const document of plan.documents) {
+    const record = matchingAutomation(document, assetRef);
+    if (record) return record;
+  }
+  return null;
 }
 
 function describePlan(
   plan: PlannedStudy,
   imageGeneration: StudyRunResult["imageGeneration"],
 ): StudyRunResult {
+  const createsImage = plan.action === "generate_image" || plan.action === "regenerate_image";
   const generation = plan.action === "withheld_by_max_images" ? "withheld" : imageGeneration;
   return {
     key: plan.key,
@@ -226,9 +272,13 @@ function describePlan(
     action: plan.action,
     existingImage: plan.existingImage,
     assetReused: plan.assetReused,
-    imageGeneration: plan.action === "generate_image" ? generation : plan.action === "withheld_by_max_images" ? "withheld" : "skipped",
+    imageGeneration: createsImage ? generation : plan.action === "withheld_by_max_images" ? "withheld" : "skipped",
     reason: plan.reason,
     assetRef: plan.canonicalAssetRef,
+    provenance: plan.provenance,
+    regenerationEligible: plan.regenerationEligible,
+    recordedPlan: plan.recordedPlan,
+    proposedPlan: plan.brief.plan,
     documents: plan.documents.map((doc) => ({
       id: doc._id,
       language: doc.language?.trim() || "unknown",

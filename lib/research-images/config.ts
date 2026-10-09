@@ -5,10 +5,17 @@
  */
 export const DEFAULT_RESEARCH_IMAGE_MODEL = "gpt-image-2.5-flare";
 
-/** Exact phrase required before any image generation or Sanity mutation. */
+/** Exact phrase required before creating images for studies that do not have one. */
 export const CONFIRM_RESEARCH_IMAGES = "GENERATE RESEARCH IMAGES";
 
+/** Exact phrase required before replacing an image that this automation previously created. */
+export const CONFIRM_REGENERATE_RESEARCH_IMAGES = "REGENERATE RESEARCH IMAGES";
+
 export const RESEARCH_IMAGE_SCOPES = ["all_missing", "published_missing", "drafts_missing"] as const;
+
+export const REGENERATION_MODES = ["missing_only", "ai_generated_only"] as const;
+
+export type RegenerationMode = (typeof REGENERATION_MODES)[number];
 
 export type ResearchImageScope = (typeof RESEARCH_IMAGE_SCOPES)[number];
 
@@ -43,6 +50,18 @@ export function resolveResearchImageScope(value: string | undefined): ResearchIm
     );
   }
   return scope;
+}
+
+export function resolveRegenerationMode(value: string | undefined): RegenerationMode {
+  const mode = (value?.trim() || "missing_only") as RegenerationMode;
+  if (!REGENERATION_MODES.includes(mode)) {
+    throw new Error("regeneration_mode must be missing_only or ai_generated_only.");
+  }
+  return mode;
+}
+
+export function confirmationForRegenerationMode(mode: RegenerationMode): string {
+  return mode === "ai_generated_only" ? CONFIRM_REGENERATE_RESEARCH_IMAGES : CONFIRM_RESEARCH_IMAGES;
 }
 
 export function resolveMaxImages(value: number | "ALL" | string | undefined): number | "ALL" {
