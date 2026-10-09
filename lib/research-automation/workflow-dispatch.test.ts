@@ -166,6 +166,22 @@ test("unchecked full automation keeps the existing discovery paths", () => {
   assert.equal(write.calls.includes("research:automate"), false);
 });
 
+test("named study import is a separate confirmation and does not publish", () => {
+  const result = runDispatch({
+    GITHUB_EVENT_NAME: "workflow_dispatch",
+    RUN_FULL_AUTOMATION: "false",
+    WRITE_DRAFTS: "false",
+    MAX_CREATES: "1",
+    CONFIRM_AUTOMATION: "IMPORT NAMED STUDIES",
+  });
+  assert.equal(result.status, 0);
+  assert.equal(result.calls, "mode= args=run research:import-selected -- --write\n");
+  assert.equal(result.calls.includes("research:discover"), false);
+  assert.equal(result.calls.includes("research:automate"), false);
+  assert.match(result.stdout, /Nothing is published/);
+  assert.equal(workflow.includes(".publish("), false);
+});
+
 test("the Monday and Thursday schedule still uses the capped automation runner", () => {
   const result = runDispatch({
     GITHUB_EVENT_NAME: "schedule",

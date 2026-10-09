@@ -7,10 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test lib/*.test.ts lib/research-discovery/*.test.ts lib/research-automation/*.test.ts lib/research-backfill/*.test.ts lib/research-enrichment/*.test.ts lib/research-editorial/*.test.ts lib/translation/*.test.ts sanity/lib/*.test.ts scripts/create-update-drafts.test.ts scripts/update-drafts.test.ts",
+    "test": "tsx --test lib/*.test.ts lib/research-discovery/*.test.ts lib/research-automation/*.test.ts lib/research-backfill/*.test.ts lib/research-enrichment/*.test.ts lib/research-editorial/*.test.ts lib/research-import/*.test.ts lib/translation/*.test.ts sanity/lib/*.test.ts scripts/create-update-drafts.test.ts scripts/update-drafts.test.ts",
     "research:discover": "tsx scripts/discover-research.ts",
     "research:automate": "tsx scripts/automate-research.ts",
     "research:backfill": "tsx scripts/backfill-research.ts",
+    "research:import-selected": "tsx scripts/import-selected-research.ts",
     "research:enrich": "tsx scripts/enrich-research.ts",
     "research:editorial-backfill": "tsx scripts/backfill-research-editorial-status.ts",
     "translate:he": "tsx scripts/translate-he.ts"
