@@ -1,0 +1,106 @@
+name: Research Image Backfill
+
+# SAFETY: manual only. There is no schedule.
+# Dry-run is the default. It reads Research documents and writes nothing.
+# A write is possible only when dry_run is false AND confirm_write is exactly
+# GENERATE RESEARCH IMAGES.
+# Writes patch only the existing Research mainImage field and the alt text
+# nested on that image. Drafts stay unpublished. This workflow never publishes
+# and never creates Research documents.
+# The Monday/Thursday Research Discovery schedule is unchanged.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Preview which Research studies need images without generating or writing images.
+        type: boolean
+        required: false
+        default: true
+      scope:
+        description: all_missing includes every logical study. published_missing only studies with a published document. drafts_missing only unpublished drafts.
+        type: choice
+        options:
+          - all_missing
+          - published_missing
+          - drafts_missing
+        default: all_missing
+      max_images:
+        description: How many new images to generate. Use an integer from 1 to 50, or ALL. English and Hebrew count as one study.
+        type: string
+        required: false
+        default: "10"
+      confirm_write:
+        description: Required when dry-run is unchecked. Type GENERATE RESEARCH IMAGES to allow image generation and Sanity image patches. This never publishes.
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  backfill-images:
+    name: Backfill research images
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run research image backfill
+        env:
+          SANITY_WRITE_TOKEN: ${{ secrets.SANITY_WRITE_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          RESEARCH_IMAGE_MODEL: ${{ vars.RESEARCH_IMAGE_MODEL }}
+          RESEARCH_AI_MODEL: ${{ vars.RESEARCH_AI_MODEL }}
+          NEXT_PUBLIC_SANITY_PROJECT_ID: 8wc8eouj
+          NEXT_PUBLIC_SANITY_DATASET: production
+          NEXT_PUBLIC_SANITY_API_VERSION: "2026-09-22"
+          IMAGE_DRY_RUN: ${{ github.event.inputs.dry_run }}
+          IMAGE_SCOPE: ${{ github.event.inputs.scope || 'all_missing' }}
+          IMAGE_MAX: ${{ github.event.inputs.max_images || '10' }}
+          IMAGE_CONFIRM: ${{ github.event.inputs.confirm_write }}
+        run: |
+          echo "Research image backfill is manual. It never publishes."
+          if [ -z "$IMAGE_SCOPE" ]; then
+            IMAGE_SCOPE=all_missing
+          fi
+          case "$IMAGE_SCOPE" in
+            all_missing|published_missing|drafts_missing) ;;
+            *)
+              echo "Invalid scope: $IMAGE_SCOPE"
+              exit 1
+              ;;
+          esac
+          if [ -z "$IMAGE_MAX" ]; then
+            IMAGE_MAX=10
+          fi
+          if [ "$IMAGE_MAX" != "ALL" ]; then
+            if ! [[ "$IMAGE_MAX" =~ ^[1-9][0-9]?$ ]] || [ "$IMAGE_MAX" -lt 1 ] || [ "$IMAGE_MAX" -gt 50 ]; then
+              echo "max_images must be an integer from 1 to 50, or ALL. Received: $IMAGE_MAX"
+              echo "Exiting before image generation or any Sanity write."
+              exit 1
+            fi
+          fi
+          if [ "$IMAGE_DRY_RUN" = "false" ]; then
+            if [ "$IMAGE_CONFIRM" != "GENERATE RESEARCH IMAGES" ]; then
+              echo "Refusing to write. When dry-run is unchecked, set confirm_write to exactly: GENERATE RESEARCH IMAGES"
+              echo "Exiting before image generation or any Sanity write."
+              exit 1
+            fi
+            echo "Mode: write. Existing mainImage and alt text only. Drafts stay unpublished."
+            echo "Eligible studies, images to generate, reused images, requested max, and image model are printed before the first image request."
+            npm run research:image-backfill -- --write --scope="$IMAGE_SCOPE" --max-images="$IMAGE_MAX" --confirm="$IMAGE_CONFIRM"
+          else
+            echo "Mode: dry-run. No images will be generated. No Sanity documents will be modified or published."
+            npm run research:image-backfill -- --dry-run --scope="$IMAGE_SCOPE" --max-images="$IMAGE_MAX"
+          fi
