@@ -12,9 +12,7 @@ export function formatImageCostBanner(result: Pick<
   const reused = result.studies.filter((study) => study.action === "reuse_existing_asset").length;
   const missing = result.studies.filter((study) => !study.existingImage).length;
   const existing = result.studies.filter((study) => study.existingImage).length;
-  const eligibleRegen = result.studies.filter(
-    (study) => study.provenance === "research-image-automation",
-  ).length;
+  const eligibleRegen = countRegenerationCandidates(result);
   return [
     `Regeneration mode: ${result.regenerationMode}`,
     `Logical studies: ${result.studies.length}`,
@@ -48,7 +46,7 @@ export function formatResearchImageReport(result: ResearchImageBackfillResult): 
     `Already have image: ${already}`,
     `Would reuse existing image: ${reuse}`,
     `Missing image: ${studies.filter((study) => !study.existingImage).length}`,
-    `Images eligible for regeneration: ${studies.filter((study) => study.provenance === "research-image-automation").length}`,
+    `Images eligible for regeneration: ${countRegenerationCandidates(result)}`,
     `Images that would be generated: ${generate + regenerate}`,
     `Published documents that would be patched: ${publishedPlanned}`,
     `Draft documents that would be patched: ${draftPlanned}`,
@@ -97,6 +95,15 @@ export function backfillHasFailures(result: ResearchImageBackfillResult): boolea
     (study) =>
       study.imageGeneration === "failed" || study.patches.some((patch) => patch.status === "failed"),
   );
+}
+
+function countRegenerationCandidates(
+  result: Pick<ResearchImageBackfillResult, "studies" | "regenerationMode">,
+): number {
+  if (result.regenerationMode === "replace_existing") {
+    return result.studies.filter((study) => study.existingImage).length;
+  }
+  return result.studies.filter((study) => study.provenance === "research-image-automation").length;
 }
 
 function countPublication(studies: readonly StudyRunResult[], publication: "published" | "draft"): number {

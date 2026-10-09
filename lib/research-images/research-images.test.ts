@@ -37,6 +37,10 @@ const workflow = readFileSync(
   new URL("../../.github/workflows/research-image-backfill.yml", import.meta.url),
   "utf8",
 );
+const replaceWorkflow = readFileSync(
+  new URL("../../.github/workflows/replace-research-images.yml", import.meta.url),
+  "utf8",
+);
 const discovery = readFileSync(
   new URL("../../.github/workflows/research-discovery.yml", import.meta.url),
   "utf8",
@@ -916,6 +920,140 @@ test("only a matching automation record can be regenerated, and missing_only lea
   assert.match(allowed.calls, /--confirm=REGENERATE RESEARCH IMAGES/);
 });
 
+test("replace_existing replaces a current cover and keeps one asset for both languages", async () => {
+  const current = "image-current-cover-1400x788-png";
+  const documents = [
+    research({
+      _id: "research-pubmed-15",
+      pmid: "15",
+      title: "Brief stationary cycling for inactive adults",
+      intervention: "Participants completed short stationary cycling bouts.",
+      mainImage: image(current, "Editor description of the current cover."),
+    }),
+    research({
+      _id: "research-he-research-pubmed-15",
+      language: "he",
+      pmid: "15",
+      translationSourceId: "research-pubmed-15",
+    }),
+  ];
+
+  const untouched = await writeRun(documents, { regenerationMode: "missing_only" });
+  assert.equal(untouched.calls.generate, 0);
+  assert.equal(untouched.result.studies[0]?.action, "reuse_existing_asset");
+
+  const blocked = await writeRun(documents, {
+    regenerationMode: "ai_generated_only",
+    confirm: "REGENERATE RESEARCH IMAGES",
+  });
+  assert.equal(blocked.calls.generate, 0);
+  assert.equal(blocked.result.studies[0]?.provenance, "unknown");
+
+  let loaded = false;
+  await assert.rejects(
+    () =>
+      runResearchImageBackfill({
+        dryRun: false,
+        scope: "all_missing",
+        maxImages: "ALL",
+        regenerationMode: "replace_existing",
+        confirm: "GENERATE RESEARCH IMAGES",
+        loadDocuments: async () => {
+          loaded = true;
+          return documents;
+        },
+        uploadImage: async () => ASSET,
+        patchDocument: async () => {},
+      }),
+    /REPLACE EXISTING RESEARCH IMAGES/,
+  );
+  assert.equal(loaded, false);
+
+  const replaced = await writeRun(documents, {
+    regenerationMode: "replace_existing",
+    confirm: "REPLACE EXISTING RESEARCH IMAGES",
+  });
+  assert.equal(replaced.calls.generate, 1);
+  assert.equal(replaced.calls.upload, 1);
+  assert.equal(replaced.calls.patch.length, 2);
+  assert.deepEqual(
+    replaced.calls.patch.map((patch) => imageRef(patch.fields)),
+    [ASSET, ASSET],
+  );
+  assert.equal(replaced.result.studies[0]?.action, "regenerate_image");
+  assert.equal(replaced.result.studies[0]?.reason, "replace existing image");
+  assert.match(formatResearchImageReport(replaced.result), /Images eligible for regeneration: 1/);
+  for (const patch of replaced.calls.patch) {
+    const record = patch.fields.imageAutomation as { source?: string; assetRef?: string };
+    assert.equal(record.source, "research-image-automation");
+    assert.equal(record.assetRef, ASSET);
+  }
+
+  const missingOnly = await writeRun(
+    [research({ _id: "research-pubmed-16", pmid: "16" })],
+    { regenerationMode: "replace_existing", confirm: "REPLACE EXISTING RESEARCH IMAGES" },
+  );
+  assert.equal(missingOnly.calls.generate, 0);
+  assert.equal(missingOnly.result.studies[0]?.action, "skip_existing_image");
+});
+
+test("Replace Research Images is manual and requires its own confirmation", () => {
+  assert.match(replaceWorkflow, /name: Replace Research Images/);
+  assert.match(replaceWorkflow, /workflow_dispatch:/);
+  assert.equal(replaceWorkflow.includes("cron:"), false);
+  assert.match(replaceWorkflow, /dry_run:[\s\S]*?default: true/);
+  assert.match(replaceWorkflow, /max_images:[\s\S]*?default: "10"/);
+  assert.match(replaceWorkflow, /REPLACE EXISTING RESEARCH IMAGES/);
+  assert.equal(replaceWorkflow.includes(".publish("), false);
+  assert.equal(discovery.includes("replace-research-images"), false);
+  assert.match(discovery, /cron: "0 8 \* \* 1,4"/);
+
+  const refused = runDispatch(
+    {
+      IMAGE_DRY_RUN: "false",
+      IMAGE_SCOPE: "all_missing",
+      IMAGE_MAX: "ALL",
+      IMAGE_CONFIRM: "REGENERATE RESEARCH IMAGES",
+    },
+    replaceWorkflow,
+  );
+  assert.equal(refused.status, 1);
+  assert.equal(refused.calls, "");
+  assert.match(refused.stdout, /REPLACE EXISTING RESEARCH IMAGES/);
+  assert.match(refused.stdout, /before image generation or any Sanity write/);
+
+  const dryRun = runDispatch(
+    {
+      IMAGE_DRY_RUN: "true",
+      IMAGE_SCOPE: "all_missing",
+      IMAGE_MAX: "10",
+      IMAGE_CONFIRM: "",
+    },
+    replaceWorkflow,
+  );
+  assert.equal(dryRun.status, 0);
+  assert.match(
+    dryRun.calls,
+    /research:image-backfill -- --dry-run --scope=all_missing --max-images=10 --regeneration-mode=replace_existing/,
+  );
+  assert.equal(dryRun.calls.includes("--write"), false);
+
+  const write = runDispatch(
+    {
+      IMAGE_DRY_RUN: "false",
+      IMAGE_SCOPE: "all_missing",
+      IMAGE_MAX: "ALL",
+      IMAGE_CONFIRM: "REPLACE EXISTING RESEARCH IMAGES",
+    },
+    replaceWorkflow,
+  );
+  assert.equal(write.status, 0);
+  assert.match(
+    write.calls,
+    /research:image-backfill -- --write --scope=all_missing --max-images=ALL --regeneration-mode=replace_existing --confirm=REPLACE EXISTING RESEARCH IMAGES/,
+  );
+});
+
 test("the cost banner is printed before the first image request", async () => {
   const { calls, lines } = await writeRun([research({ _id: "research-pubmed-4", pmid: "4" })]);
   const banner = lines.join("\n");
@@ -1001,7 +1139,7 @@ async function writeRun(
   options: {
     dryRun?: boolean;
     confirm?: string;
-    regenerationMode?: "missing_only" | "ai_generated_only";
+    regenerationMode?: "missing_only" | "ai_generated_only" | "replace_existing";
     scope?: "all_missing" | "published_missing" | "drafts_missing";
     maxImages?: number | "ALL" | string;
     generateImage?: () => Promise<Buffer>;
@@ -1074,14 +1212,14 @@ async function writeRun(
   }
 }
 
-function runDispatch(env: Record<string, string>) {
+function runDispatch(env: Record<string, string>, source = workflow) {
   const directory = mkdtempSync(join(tmpdir(), "research-image-backfill-"));
   const log = join(directory, "npm.log");
   const npm = join(directory, "npm");
   writeFileSync(npm, `#!/bin/sh\nprintf '%s\\n' "$*" >> ${JSON.stringify(log)}\n`);
   chmodSync(npm, 0o755);
   const script = join(directory, "run.sh");
-  writeFileSync(script, runScript(workflow));
+  writeFileSync(script, runScript(source));
   const result = spawnSync("bash", ["-eo", "pipefail", script], {
     env: { ...process.env, PATH: `${directory}:/usr/bin:/bin`, ...env },
     encoding: "utf8",

@@ -11,9 +11,15 @@ export const CONFIRM_RESEARCH_IMAGES = "GENERATE RESEARCH IMAGES";
 /** Exact phrase required before replacing an image that this automation previously created. */
 export const CONFIRM_REGENERATE_RESEARCH_IMAGES = "REGENERATE RESEARCH IMAGES";
 
+/**
+ * Exact phrase required before replacing a Research cover that already exists,
+ * including one that has no automation provenance.
+ */
+export const CONFIRM_REPLACE_EXISTING_RESEARCH_IMAGES = "REPLACE EXISTING RESEARCH IMAGES";
+
 export const RESEARCH_IMAGE_SCOPES = ["all_missing", "published_missing", "drafts_missing"] as const;
 
-export const REGENERATION_MODES = ["missing_only", "ai_generated_only"] as const;
+export const REGENERATION_MODES = ["missing_only", "ai_generated_only", "replace_existing"] as const;
 
 export type RegenerationMode = (typeof REGENERATION_MODES)[number];
 
@@ -55,13 +61,23 @@ export function resolveResearchImageScope(value: string | undefined): ResearchIm
 export function resolveRegenerationMode(value: string | undefined): RegenerationMode {
   const mode = (value?.trim() || "missing_only") as RegenerationMode;
   if (!REGENERATION_MODES.includes(mode)) {
-    throw new Error("regeneration_mode must be missing_only or ai_generated_only.");
+    throw new Error("regeneration_mode must be missing_only, ai_generated_only, or replace_existing.");
   }
   return mode;
 }
 
 export function confirmationForRegenerationMode(mode: RegenerationMode): string {
-  return mode === "ai_generated_only" ? CONFIRM_REGENERATE_RESEARCH_IMAGES : CONFIRM_RESEARCH_IMAGES;
+  if (mode === "replace_existing") return CONFIRM_REPLACE_EXISTING_RESEARCH_IMAGES;
+  if (mode === "ai_generated_only") return CONFIRM_REGENERATE_RESEARCH_IMAGES;
+  return CONFIRM_RESEARCH_IMAGES;
+}
+
+export function regenerationWriteRefusal(mode: RegenerationMode): string {
+  const phrase = confirmationForRegenerationMode(mode);
+  if (mode === "missing_only") {
+    return `Refusing to write. confirm_write must be exactly ${phrase}. Nothing was generated or written.`;
+  }
+  return `Refusing to replace images. confirm_write must be exactly ${phrase}. Nothing was generated or written.`;
 }
 
 export function resolveMaxImages(value: number | "ALL" | string | undefined): number | "ALL" {

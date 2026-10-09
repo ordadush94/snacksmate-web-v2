@@ -1,5 +1,6 @@
 import {
   confirmationForRegenerationMode,
+  regenerationWriteRefusal,
   resolveMaxImages,
   resolveRegenerationMode,
   resolveResearchImageScope,
@@ -77,11 +78,7 @@ export function parseResearchImageArgs(argv: readonly string[]): ResearchImageAr
   }
   const mode = resolveRegenerationMode(regenerationMode);
   if (write && confirm !== confirmationForRegenerationMode(mode)) {
-    throw new Error(
-      mode === "ai_generated_only"
-        ? "Refusing to replace images. confirm_write must be exactly REGENERATE RESEARCH IMAGES. Nothing was generated or written."
-        : "Refusing to write. confirm_write must be exactly GENERATE RESEARCH IMAGES. Nothing was generated or written.",
-    );
+    throw new Error(regenerationWriteRefusal(mode));
   }
 
   return {
