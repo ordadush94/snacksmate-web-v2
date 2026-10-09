@@ -1,4 +1,7 @@
-import type { ActivityId, PopulationId, ResearchImageDocument, VisualBrief } from "./types";
+import { buildResearchImagePrompt } from "./prompt";
+import type { ActivityId, DiversityHistoryEntry, PopulationId, ResearchImageDocument, VisualBrief } from "./types";
+import { buildResearchVisualPlan, sceneForPlan } from "./visual-plan";
+import { COMPOSITION_PROSE, SETTING_PROSE } from "./style";
 
 const ACTIVITY_RULES: readonly { id: ActivityId; pattern: RegExp }[] = [
   {
@@ -32,28 +35,6 @@ const ACTIVITY_RULES: readonly { id: ActivityId; pattern: RegExp }[] = [
   },
 ];
 
-const ACTIVITY_SCENE: Record<ActivityId, string> = {
-  "stair-climbing": "moving briskly up a short flight of stairs",
-  cycling: "performing a brief stationary cycling session on a simple exercise bike",
-  resistance: "performing one simple resistance movement, such as a slow bodyweight squat",
-  walking: "taking a short walk along a quiet path",
-  "sedentary-interruption": "standing up from a desk chair to begin a short movement break",
-  vilpa: "doing a brief burst of vigorous everyday movement, such as climbing a few stairs or carrying a small bag",
-  "exercise-snack": "performing a short, simple bout of exercise in an ordinary room",
-  "general-activity": "doing a short bout of everyday physical activity",
-};
-
-const ACTIVITY_SETTING: Record<ActivityId, string> = {
-  "stair-climbing": "a bright, uncluttered indoor stairwell",
-  cycling: "a bright, uncluttered indoor room",
-  resistance: "a calm home or studio with an open floor",
-  walking: "a simple outdoor path or a bright indoor corridor",
-  "sedentary-interruption": "a calm office with a desk and chair",
-  vilpa: "an ordinary indoor everyday setting",
-  "exercise-snack": "a simple indoor room with plenty of open space",
-  "general-activity": "a neutral, uncluttered indoor setting",
-};
-
 const CONCERN_LABEL: Record<ActivityId, string> = {
   "stair-climbing": "stair climbing",
   cycling: "cycling",
@@ -65,29 +46,14 @@ const CONCERN_LABEL: Record<ActivityId, string> = {
   "general-activity": "physical activity",
 };
 
-const VARIANTS = [
-  "Composition: three-quarter view, with the person slightly left of center.",
-  "Composition: a calm side view, with open space around the person.",
-  "Composition: eye-level view, with the person right of center.",
-  "Composition: a little foreground space, with the person near the middle of the frame.",
-];
-
-const STYLE = [
-  "Modern editorial illustration for a scientific physical-activity evidence hub.",
-  "Clean, friendly, professional, and restrained rather than childish.",
-  "Soft mint and teal accents (#24dc9d, #0f9f72, #c8f5e9) on a neutral fog or off-white background (#f3faf7).",
-  "Clear human subject, moderate visual depth, uncluttered composition.",
-  "Inclusive, neutral representation. Do not infer race, ethnicity, or socioeconomic status.",
-  "Suitable for both English and Hebrew pages. Do not include any writing system.",
-].join(" ");
-
 /**
  * Turn one Research document into a visual brief.
- * The brief names the activity and setting. It does not carry statistical findings.
+ * The study chooses the activity. The diversity planner chooses the scene.
  */
 export function buildResearchVisualBrief(
   document: ResearchImageDocument,
   variantKey = document._id,
+  history: readonly DiversityHistoryEntry[] = [],
 ): VisualBrief {
   const intervention = plainText(document.intervention);
   const title = document.title?.trim() ?? "";
@@ -119,7 +85,7 @@ export function buildResearchVisualBrief(
     population = "adult";
   }
 
-  const corpus = [intervention, title, excerpt, rest].filter(Boolean).join("\n");
+  const corpus = [intervention, title, excerpt, populationText, rest].filter(Boolean).join("\n");
   const metabolic = /\b(glucose|glycemic|glycaemic|insulin|diabetes|metabolic)\b/i.test(corpus);
   const concerns = new Set<string>([CONCERN_LABEL[activity]]);
   if (/\b(vilpa|vigorous intermittent lifestyle physical activity)\b/i.test(corpus) || topic === "vilpa") {
@@ -132,51 +98,37 @@ export function buildResearchVisualBrief(
   if (population === "young-adult") concerns.add("young adults");
   if (metabolic) concerns.add("metabolic response");
 
+  const plan = buildResearchVisualPlan({
+    seed: variantKey,
+    activity,
+    population,
+    corpus,
+    history,
+  });
+
   return {
     activity,
     population,
-    setting: ACTIVITY_SETTING[activity],
-    scene: `${populationPhrase(population)} ${ACTIVITY_SCENE[activity]}`,
+    setting: SETTING_PROSE[plan.setting],
+    scene: sceneForPlan(plan),
     concerns: [...concerns],
     metabolic,
-    variant: VARIANTS[stableIndex(variantKey, VARIANTS.length)],
+    variant: COMPOSITION_PROSE[plan.composition],
+    plan,
   };
 }
 
 export function buildImagePrompt(brief: VisualBrief): string {
-  const lines = [
-    "Create one landscape editorial cover illustration.",
-    `Scene: ${brief.scene}.`,
-    `Setting: ${brief.setting}.`,
-    personDirection(brief.population),
-    brief.variant,
-    `Study context, which must not appear as written text: ${brief.concerns.join(", ")}.`,
-    STYLE,
-    "Show the activity itself. Do not illustrate a measured result or a change in health.",
-    "Do not create before-and-after imagery.",
-    brief.metabolic
-      ? "A metabolic context is not a device or a chart. Do not show glucose meters, insulin, medical devices, or disease stereotypes."
-      : "Do not show medical devices or disease stereotypes.",
-    "Mandatory: no text, no titles, no words, no letters, no numbers, no captions, no charts, no graphs, no data labels, no logos, no app interface, no watermarks, no DOI, and no scientific paper title.",
-  ];
-  return lines.join("\n");
+  return buildResearchImagePrompt({
+    plan: brief.plan,
+    scene: brief.scene,
+    concerns: brief.concerns,
+    metabolic: brief.metabolic,
+  });
 }
 
-export function populationPhrase(population: PopulationId): string {
-  if (population === "older-adult") return "An older adult";
-  if (population === "young-adult") return "A young adult";
-  return "An adult";
-}
-
-function personDirection(population: PopulationId): string {
-  if (population === "older-adult") {
-    return "The person is an older adult: capable and age-appropriate, not a frailty stereotype.";
-  }
-  if (population === "young-adult") {
-    return "The person is a young adult in an ordinary setting.";
-  }
-  return "The person is an adult. Do not signal a specific ethnicity or social class.";
-}
+export { buildResearchImagePrompt } from "./prompt";
+export { buildResearchVisualPlan } from "./visual-plan";
 
 function detectActivity(parts: readonly string[]): ActivityId {
   for (const part of parts) {
@@ -195,13 +147,6 @@ function detectPopulation(text: string): PopulationId {
     return "young-adult";
   }
   return "unspecified";
-}
-
-function stableIndex(value: string, count: number): number {
-  const text = String(value ?? "study");
-  let hash = 0;
-  for (const char of text) hash = (hash * 33 + char.charCodeAt(0)) >>> 0;
-  return count > 0 ? hash % count : 0;
 }
 
 export function plainText(value: unknown): string {

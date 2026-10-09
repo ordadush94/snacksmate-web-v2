@@ -37,6 +37,7 @@ async function main() {
     dryRun: args.dryRun,
     scope: args.scope,
     maxImages: args.maxImages,
+    regenerationMode: args.regenerationMode,
     confirm: args.confirm,
     model: process.env.RESEARCH_IMAGE_MODEL,
     qaModel: resolveResearchAiModel(process.env.RESEARCH_AI_MODEL),

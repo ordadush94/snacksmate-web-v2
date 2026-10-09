@@ -1,8 +1,9 @@
 import { assertAltText } from "./alt";
 import { assertAssetRef } from "./generate";
+import { RESEARCH_IMAGE_AUTOMATION_SOURCE, parseImageAutomation } from "./provenance";
 import type { ImagePatchPlan } from "./types";
 
-export const RESEARCH_IMAGE_PATCH_KEYS = ["mainImage", "mainImage.alt"] as const;
+export const RESEARCH_IMAGE_PATCH_KEYS = ["mainImage", "mainImage.alt", "imageAutomation"] as const;
 
 const MAIN_IMAGE_KEYS = new Set(["_type", "asset", "alt", "hotspot", "crop"]);
 
@@ -14,9 +15,9 @@ export function assertAllowlistedImagePatch(fields: Record<string, unknown>): vo
   const keys = Object.keys(fields);
   if (keys.length === 0) throw new Error("Refusing an empty Research patch.");
   for (const key of keys) {
-    if (key !== "mainImage" && key !== "mainImage.alt") {
+    if (key !== "mainImage" && key !== "mainImage.alt" && key !== "imageAutomation") {
       throw new Error(
-        `Refusing to patch Research field "${key}". Only mainImage and its alt text may change.`,
+        `Refusing to patch Research field "${key}". Only mainImage, its alt text, and image automation provenance may change.`,
       );
     }
   }
@@ -24,6 +25,7 @@ export function assertAllowlistedImagePatch(fields: Record<string, unknown>): vo
   if ("mainImage.alt" in fields && typeof fields["mainImage.alt"] !== "string") {
     throw new Error("mainImage alt text must be a string.");
   }
+  if ("imageAutomation" in fields) assertImageAutomationValue(fields.imageAutomation);
 }
 
 export function materializeImagePatch(
@@ -71,6 +73,13 @@ function assertMainImageValue(value: unknown): void {
     if (key !== "_type" && key !== "_ref") {
       throw new Error(`Refusing to store "${key}" on the mainImage asset reference.`);
     }
+  }
+}
+
+function assertImageAutomationValue(value: unknown): void {
+  const record = parseImageAutomation(value);
+  if (!record || record.source !== RESEARCH_IMAGE_AUTOMATION_SOURCE) {
+    throw new Error("imageAutomation provenance is incomplete, so it cannot authorize a later replacement.");
   }
 }
 

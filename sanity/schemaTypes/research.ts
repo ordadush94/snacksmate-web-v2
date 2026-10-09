@@ -724,6 +724,52 @@ export const researchType = defineType({
       description:
         'Internal editorial note from discovery automation. This is not shown on the public research page.',
     }),
+    defineField({
+      name: 'imageAutomation',
+      title: 'Image automation',
+      type: 'object',
+      group: 'editorial',
+      readOnly: true,
+      description:
+        'Internal provenance for a cover created by Research image automation. This is not shown on the public research page. Leave it unchanged. Replacing the image by hand makes this record stop matching, so automation will not overwrite the manual image.',
+      fields: [
+        defineField({name: 'source', title: 'Source', type: 'string', readOnly: true}),
+        defineField({name: 'assetRef', title: 'Asset reference', type: 'string', readOnly: true}),
+        defineField({name: 'studyKey', title: 'Study key', type: 'string', readOnly: true}),
+        defineField({name: 'generatedAt', title: 'Generated at', type: 'datetime', readOnly: true}),
+        defineField({name: 'activity', title: 'Activity', type: 'string', readOnly: true}),
+        defineField({name: 'setting', title: 'Setting', type: 'string', readOnly: true}),
+        defineField({name: 'subjectCount', title: 'Subject count', type: 'string', readOnly: true}),
+        defineField({
+          name: 'subjectPresentation',
+          title: 'Subject presentation',
+          type: 'string',
+          readOnly: true,
+        }),
+        defineField({name: 'approximateAge', title: 'Approximate age', type: 'string', readOnly: true}),
+        defineField({name: 'composition', title: 'Composition', type: 'string', readOnly: true}),
+        defineField({
+          name: 'supportingPalette',
+          title: 'Supporting palette',
+          type: 'string',
+          readOnly: true,
+        }),
+        defineField({name: 'brandAccent', title: 'Brand accent', type: 'string', readOnly: true}),
+        defineField({
+          name: 'appearanceVariation',
+          title: 'Appearance variation',
+          type: 'string',
+          readOnly: true,
+        }),
+        defineField({
+          name: 'keyProps',
+          title: 'Key props',
+          type: 'array',
+          readOnly: true,
+          of: [{type: 'string'}],
+        }),
+      ],
+    }),
   ],
   orderings: [
     {
