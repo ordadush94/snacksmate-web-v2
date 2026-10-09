@@ -10,6 +10,9 @@ name: Research Discovery
 # and confirm_automation is exactly RUN AUTOMATION. It calls the same research:automate
 # runner as the schedule, creates drafts only, and never publishes.
 # The discovery dry_run input is not applied to that mode.
+# A named-study import runs only when confirm_automation is exactly IMPORT NAMED STUDIES.
+# That mode creates unpublished English drafts for a fixed PubMed list, then enriches
+# them and creates Hebrew drafts. It never publishes. dry_run does not apply to it.
 on:
   workflow_dispatch:
     inputs:
@@ -33,7 +36,7 @@ on:
         required: false
         default: 1
       confirm_automation:
-        description: "Full automation only. Type RUN AUTOMATION to allow the run. Any other value stops before a Sanity write. Leave empty for Research Discovery."
+        description: "Type RUN AUTOMATION for full automation, or IMPORT NAMED STUDIES to import the fixed PubMed list as unpublished English and Hebrew drafts. Leave empty for Research Discovery. This never publishes."
         type: string
         required: false
         default: ""
@@ -48,7 +51,7 @@ jobs:
   discover:
     name: Discover research drafts
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -82,6 +85,11 @@ jobs:
         run: |
           echo "Only AUTO_DRAFT records can create Sanity drafts. REVIEW_CANDIDATE records are never written."
           echo "Published: 0"
+          if [ "$CONFIRM_AUTOMATION" = "IMPORT NAMED STUDIES" ]; then
+            echo "Mode: named study import. Creates unpublished English drafts, enriches them, and creates Hebrew drafts. Nothing is published."
+            IMPORT_CONFIRM="CREATE DRAFTS" npm run research:import-selected -- --write
+            exit $?
+          fi
           if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
             echo "Mode: scheduled draft pipeline. At most 10 new English drafts, then enrichment and Hebrew drafts. Nothing is published."
             npm run research:automate -- --max-creates=10
