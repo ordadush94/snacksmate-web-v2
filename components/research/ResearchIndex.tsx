@@ -1,6 +1,7 @@
 import type { Locale } from "@/content/types";
 import { getResearchCopy } from "@/content/research";
 import type { ResearchListItem } from "@/sanity/lib/research";
+import { LatinParentheticals } from "@/components/site/LatinParentheticals";
 import { PublicationShell } from "@/components/site/PublicationShell";
 import { ResearchLibrary } from "./ResearchLibrary";
 
@@ -18,7 +19,9 @@ export function ResearchIndex({ locale, items }: ResearchIndexProps) {
         <header className="research-header">
           <p className="section-kicker">{copy.navLabel}</p>
           <h1>{copy.pageTitle}</h1>
-          <p className="section-lead">{copy.pageDescription}</p>
+          <p className="section-lead">
+            <LatinParentheticals text={copy.pageDescription} />
+          </p>
         </header>
         <ResearchLibrary locale={locale} items={items} />
       </div>

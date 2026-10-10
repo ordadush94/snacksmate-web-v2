@@ -10,7 +10,7 @@ const TOPIC_LABELS: Record<string, Record<Locale, string>> = {
     he: "שיתוף פעולה מחקרי",
   },
   "company-news": { en: "Company News", he: "חדשות Snacksmate" },
-  "exercise-snacks": { en: "Exercise Snacks", he: "נשנושי כושר" },
+  "exercise-snacks": { en: "Exercise Snacks", he: "חטיפי תנועה" },
   research: { en: "Research", he: "מחקר" },
   fitness: { en: "Fitness", he: "כושר" },
   health: { en: "Health", he: "בריאות" },

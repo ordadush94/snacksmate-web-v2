@@ -1,4 +1,5 @@
 import { forbiddenLiteralLines, glossaryPromptLines } from "./glossary";
+import { contextualExerciseSnackLines } from "./terminology";
 import { researchSourceSpans, translatableSpans } from "./segments";
 import type { EnglishDocument, TranslationContentType } from "./types";
 
@@ -49,11 +50,14 @@ export function buildTranslationInstructions(contentType: TranslationContentType
     "- seoDescription stays about 140–160 characters.",
     "- When the English comparison has a direction, name both sides. לאחר מצב B נמדד ערך גבוה יותר של מדד A לעומת מצב A. Do not stop at גבוה יותר without לעומת or מאשר. Stay concise, and do not add a claim the English does not support.",
     "- Do not translate the English SEO text literally when a more natural Hebrew search phrase exists.",
-    "- Use נשנושי כושר when the subject is exercise snacks and the phrase fits. Do not stuff keywords or write clickbait.",
+    "- When the subject is exercise snacks, use the glossary Hebrew only where it fits the sentence. Do not stuff keywords or write clickbait.",
     "",
     "Terminology:",
     "Consult this glossary before you write. If a term is listed, use it. Do not invent a competing Hebrew term.",
     glossaryPromptLines(),
+    "",
+    "Exercise-snack terminology. Use these contextual forms, and do not invent a competing Hebrew term:",
+    contextualExerciseSnackLines(),
     "",
     "Do not produce awkward literal Hebrew. In particular:",
     forbiddenLiteralLines(),
@@ -124,6 +128,7 @@ function researchRules(): string {
     "Do not add results that are not in the English field.",
     "Return an empty string for population, duration, or comparator when the English field is empty.",
     "Return an empty array for a Portable Text field that has no spans.",
+    "Exercise snack terminology follows the glossary. One snack is חטיף תנועה. More than one is חטיפי תנועה. An exercise-snacking intervention is התערבות המבוססת על חטיפי תנועה.",
     "The Limitations heading already exists. Do not add a label such as Design-level limitation.",
     "Study design and topic are machine values. They are not in your output.",
   ].join("\n");
@@ -135,6 +140,7 @@ function articleRules(): string {
     "Localize the title, excerpt, body, seoTitle, and seoDescription into natural Hebrew.",
     "Return an empty array for body when there are no spans.",
     "Return an empty string for imageAlt when the English image has no alt text.",
+    "Use חטיף תנועה or חטיפי תנועה only when the English is about exercise snacks and the Hebrew sentence needs the term. Do not add it to alt text that describes a visible action such as climbing stairs.",
   ].join("\n");
 }
 
@@ -145,6 +151,7 @@ export function buildRefinementInstructions(): string {
     "The Hebrew translation below failed the validation checks in the input.",
     "Use the original English for those fields and the current Hebrew.",
     "Preserve all facts, uncertainty, comparison direction, statistical meaning, numbers, units, and terminology.",
+    "Replace outdated public Hebrew נשנוש כושר, נשנושי כושר, נשנוש הכושר, and נשנושי הכושר with חטיף תנועה or חטיפי תנועה, matching number and definiteness. Do not write חטיף תנועהים, חטיפי תנועה כושר, or התערבות חטיף תנועה.",
     "Keep the difference between an observational association and an intervention contrast.",
     "Do not introduce information that is absent from the English source.",
     "Do not translate journal names, paper titles, author names, DOIs, or URLs.",

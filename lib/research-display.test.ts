@@ -10,9 +10,9 @@ test("reader-facing research titles prefer a localized seoTitle", () => {
   assert.equal(
     researchReaderTitle({
       title: "A two-minute exercise snack may be sufficient",
-      seoTitle: "שתי דקות של נשנוש כושר וחמצון שומנים",
+      seoTitle: "שתי דקות של חטיף תנועה וחמצון שומנים",
     }),
-    "שתי דקות של נשנוש כושר וחמצון שומנים",
+    "שתי דקות של חטיף תנועה וחמצון שומנים",
   );
   assert.equal(
     researchReaderTitle({ title: "English study", seoTitle: "   " }),
