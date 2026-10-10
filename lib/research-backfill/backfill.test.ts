@@ -108,7 +108,7 @@ test("treats an English document and its Hebrew translation as one study", () =>
     },
     {
       id: "drafts.research-he-research-pubmed-111",
-      title: "נשנושי כושר משפרים כושר",
+      title: "חטיפי תנועה משפרים כושר",
       slug: "exercise-snacks-improve-fitness-he",
       language: "he",
       translationSourceId: "research-pubmed-111",

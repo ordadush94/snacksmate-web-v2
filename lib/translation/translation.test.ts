@@ -80,12 +80,16 @@ test("glossary is the only terminology source and matches longer phrases first",
     ["exercise-snack"],
   );
   assert.deepEqual(
-    missingGlossaryTerms("exercise snacks", "נשנושי כושר"),
+    missingGlossaryTerms("exercise snacks", "חטיפי תנועה"),
     [],
   );
   assert.equal(
-    missingGlossaryTerms("exercise snacks", "נשנוש כושר").some((match) => match.id === "exercise-snacks"),
+    missingGlossaryTerms("exercise snacks", "נשנושי כושר").some((match) => match.id === "exercise-snacks"),
     true,
+  );
+  assert.equal(
+    missingGlossaryTerms("exercise snack", "חטיף תנועה").length,
+    0,
   );
   assert.equal(
     missingGlossaryTerms("was associated with lower risk", "נמצא קשר וסיכון נמוך יותר").length,
@@ -108,7 +112,7 @@ test("glossary is the only terminology source and matches longer phrases first",
 
 test("suspicious literal Hebrew is flagged", () => {
   const warnings = suspiciousLiteralWarnings(
-    "נשנוש תרגיל, סקירת מטריית, פעילות חיים נמרצת, ישיבה התנהגותית",
+    "נשנוש תרגיל, נשנוש כושר, נשנושי כושר, נשנוש הכושר, נשנושי הכושר, חטיפי תנועה כושר, התערבות חטיף תנועה, חטיף תנועהים, חטיפי תנועה של פעילות, ביצוע של חטיף תנועהים, סקירת מטריית, פעילות חיים נמרצת, ישיבה התנהגותית",
   );
   assert.equal(warnings.length, FORBIDDEN_HEBREW_LITERALS.length);
 });
@@ -206,7 +210,7 @@ test("observational association wording is not turned into causation", () => {
 test("SEO titles are warned only when vague or longer than 60", () => {
   assert.deepEqual(seoLengthWarnings(hebrewChars(50), hebrewChars(150)), []);
   assert.deepEqual(
-    seoLengthWarnings("נשנוש כושר של שתי דקות וחמצון שומנים", hebrewChars(150)),
+    seoLengthWarnings("חטיף תנועה של שתי דקות וחמצון שומנים", hebrewChars(150)),
     [],
   );
   assert.deepEqual(seoLengthWarnings(hebrewChars(44), hebrewChars(150)), []);
@@ -451,7 +455,7 @@ test("intervention contrasts are not forced into association wording", () => {
   assert.deepEqual(
     betweenPersonWarnings({
       sourceText: "Within-participant comparison of 1-, 2-, and 3-minute protocols",
-      hebrew: "השוואה בתוך אותם משתתפים בין פרוטוקולים של נשנוש כושר שנמשכו דקה, שתי דקות ושלוש דקות",
+      hebrew: "השוואה בתוך אותם משתתפים בין פרוטוקולים של חטיפי תנועה שנמשכו דקה, שתי דקות ושלוש דקות",
       studyDesign: "crossover-study",
     }),
     [],
@@ -666,7 +670,7 @@ test("translation request keeps the API key out of the body", async () => {
                 type: "output_text",
                 text: JSON.stringify({
                   title: "כותרת בעברית טבעית לקוראים",
-                  excerpt: "תקציר בעברית על נשנושי כושר בלי להגזים בממצאים ובלי עצות בריאות.",
+                  excerpt: "תקציר בעברית על חטיפי תנועה בלי להגזים בממצאים ובלי עצות בריאות.",
                   seoTitle: hebrewChars(50),
                   seoDescription: hebrewChars(150),
                   body: [],
@@ -1019,9 +1023,9 @@ function articleFixture(): EnglishArticle {
 function articleTranslation() {
   return {
     kind: "article" as const,
-    title: "מהו נשנוש כושר?",
+    title: "מהו חטיף תנועה?",
     excerpt:
-      "הסבר קצר על נשנושי כושר לקוראים שרוצים את הרעיון בלי פרק שיטות ובלי שפת שיווק.",
+      "הסבר קצר על חטיפי תנועה לקוראים שרוצים את הרעיון בלי פרק שיטות ובלי שפת שיווק.",
     seoTitle: hebrewChars(50),
     seoDescription: hebrewChars(150),
     body: [
@@ -1029,7 +1033,7 @@ function articleTranslation() {
       { id: "body.0.children.1", text: "הניסוי" },
       {
         id: "body.0.children.2",
-        text: " ב-The Lancet. DOI 10.1000/example. Exercise snacks and metabolic health על נשנושי כושר.",
+        text: " ב-The Lancet. DOI 10.1000/example. Exercise snacks and metabolic health על חטיפי תנועה.",
       },
     ],
     imageAlt: null,
@@ -1134,15 +1138,15 @@ function researchTranslation(): ResearchTranslation {
   return {
     kind: "research",
     excerpt:
-      "בקרב 20 סטודנטים יושבניים, בדיקה מוצלבת אקראית השוותה נשנושי כושר של דקה, שתי דקות ושלוש דקות על אופניים. שתי דקות לוו ביותר חמצון שומנים מאשר דקה אחת, והתגובה הייתה דומה בקירוב לשלוש דקות.",
-    seoTitle: "נשנוש כושר של שתי דקות עשוי להגביר חמצון שומנים",
+      "בקרב 20 סטודנטים יושבניים, בדיקה מוצלבת אקראית השוותה חטיפי תנועה של דקה, שתי דקות ושלוש דקות על אופניים. שתי דקות לוו ביותר חמצון שומנים מאשר דקה אחת, והתגובה הייתה דומה בקירוב לשלוש דקות.",
+    seoTitle: "חטיף תנועה של שתי דקות עשוי להגביר חמצון שומנים",
     seoDescription: sizedSeoDescription(
       "ניסוי מוצלב אקראי ב־20 סטודנטים השווה דקה, שתי דקות ושלוש דקות, ומצא כי שתי דקות הובילו לחמצון שומנים גבוה יותר לעומת דקה אחת.",
     ),
     population: "עשרים סטודנטים גברים בעלי אורח חיים יושבני",
     duration: "מפגשי פעילות חד־פעמיים, עם 7 ימים בין המפגשים ומעקב של 30 דקות לאחר הפעילות",
     comparator:
-      "השוואה בתוך אותם משתתפים בין פרוטוקולים של נשנוש כושר שנמשכו דקה, שתי דקות ושלוש דקות",
+      "השוואה בתוך אותם משתתפים בין פרוטוקולים של חטיפי תנועה שנמשכו דקה, שתי דקות ושלוש דקות",
     outcomes: [
       { id: "outcomes.0", text: "הוצאה אנרגטית" },
       { id: "outcomes.1", text: "חמצון שומנים" },
@@ -1152,7 +1156,7 @@ function researchTranslation(): ResearchTranslation {
     intervention: [
       {
         id: "intervention.0.children.0",
-        text: "נשנושי כושר על ארגומטר אופניים למשך דקה, שתי דקות או שלוש דקות. העומס עלה ב־30 ואט כל 10 שניות עד 180 ואט. פרוטוקול הדקה הסתיים בהגעה ל־180 ואט, והפרוטוקולים הארוכים שמרו על 180 ואט עד הסיום.",
+        text: "חטיפי תנועה על ארגומטר אופניים למשך דקה, שתי דקות או שלוש דקות. העומס עלה ב־30 ואט כל 10 שניות עד 180 ואט. פרוטוקול הדקה הסתיים בהגעה ל־180 ואט, והפרוטוקולים הארוכים שמרו על 180 ואט עד הסיום.",
       },
     ],
     mainFindings: [
@@ -1164,7 +1168,7 @@ function researchTranslation(): ResearchTranslation {
     practicalInterpretation: [
       {
         id: "practicalInterpretation.0.children.0",
-        text: "אצל הסטודנטים האלה, נשנוש רכיבה של שתי דקות לווה בחמצון שומנים גבוה יותר בזמן המאמץ מאשר דקה אחת, ובתגובה דומה בקירוב לשלוש דקות. המחקר לא בחן יתרונות בריאותיים לטווח ארוך.",
+        text: "אצל הסטודנטים האלה, חטיף תנועה של שתי דקות ברכיבה לווה בחמצון שומנים גבוה יותר בזמן המאמץ מאשר דקה אחת, ובתגובה דומה בקירוב לשלוש דקות. המחקר לא בחן יתרונות בריאותיים לטווח ארוך.",
       },
     ],
     limitations: [

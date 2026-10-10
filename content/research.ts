@@ -1,7 +1,7 @@
 import type { Locale } from "./types";
 
 const TOPIC_LABELS: Record<string, Record<Locale, string>> = {
-  "exercise-snacks": { en: "Exercise Snacks", he: "נשנושי כושר" },
+  "exercise-snacks": { en: "Exercise Snacks", he: "חטיפי תנועה" },
   vilpa: { en: "VILPA", he: "VILPA" },
   "cardiorespiratory-fitness": {
     en: "Cardiorespiratory Fitness",
@@ -106,12 +106,12 @@ export const researchCopy = {
   },
   he: {
     navLabel: "מחקרים",
-    pageTitle: "המחקר על נשנושי כושר — בשפה פשוטה",
+    pageTitle: "המחקר על חטיפי תנועה — בשפה פשוטה",
     pageDescription:
-      "Snacksmate קוראת מחקרים מדעיים על נשנושי כושר ומסבירה אותם בשפה פשוטה.",
+      "Snacksmate קוראת מחקרים מדעיים על חטיפי תנועה (Exercise Snacks) ומסבירה אותם בשפה פשוטה.",
     empty:
-      "אנחנו בונים ספריית מחקר מתרחבת על נשנושי כושר, VILPA ופעילות קצרה לאורך היום.",
-    emptyAction: "מהו נשנוש כושר?",
+      "אנחנו בונים ספריית מחקר מתרחבת על חטיפי תנועה, VILPA ופעילות קצרה לאורך היום.",
+    emptyAction: "מהו חטיף תנועה?",
     noMatches: "אין סיכומי מחקרים שתואמים לסינון הזה.",
     readResearch: "לקריאת הסיכום",
     searchLabel: "חיפוש מחקרים",
@@ -160,9 +160,9 @@ export const researchCopy = {
       "ההערות למעלה הן הקריאה של Snacksmate את המחקר, לא עצה אישית.",
     relatedArticleLabel: "כתבה קשורה",
     appCta: "כמה דקות עם Snacksmate",
-    metaTitle: "מחקרים של Snacksmate – נשנושי כושר, VILPA ומדע התנועה",
+    metaTitle: "מחקרים של Snacksmate – חטיפי תנועה, VILPA ומדע התנועה",
     metaDescription:
-      "סיכומים מובנים של מחקרים מדעיים על נשנושי כושר, VILPA, כושר לב-ריאה ותנועה בחיי היומיום.",
+      "סיכומים מובנים של מחקרים מדעיים על חטיפי תנועה, VILPA, כושר לב-ריאה ותנועה בחיי היומיום.",
   },
 } as const;
 

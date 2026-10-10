@@ -76,10 +76,16 @@ export function seoLengthWarnings(seoTitle: string, seoDescription: string): str
   return warnings;
 }
 
-export function suspiciousLiteralWarnings(hebrew: string): string[] {
-  return FORBIDDEN_HEBREW_LITERALS.filter((item) => hebrew.includes(item.pattern)).map(
-    (item) => `Suspicious literal "${item.pattern}". ${item.reason}`,
-  );
+export function suspiciousLiteralWarnings(
+  hebrew: string,
+  options?: { allowHistoricalTerminology?: boolean },
+): string[] {
+  return FORBIDDEN_HEBREW_LITERALS.filter((item) => {
+    if (options?.allowHistoricalTerminology && "allowInHistoricalContent" in item && item.allowInHistoricalContent) {
+      return false;
+    }
+    return hebrew.includes(item.pattern);
+  }).map((item) => `Suspicious literal "${item.pattern}". ${item.reason}`);
 }
 
 export function glossaryWarnings(sourceText: string, hebrew: string): string[] {

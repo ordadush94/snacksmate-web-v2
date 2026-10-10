@@ -231,6 +231,37 @@ test("English and Hebrew alt text describe the visible activity", () => {
   assert.equal(english.includes(brief.plan.rationale), false);
 });
 
+test("generic exercise-snack alt uses Hebrew movement-snack wording and stair alt stays visual", () => {
+  const generic = buildResearchVisualBrief(
+    research({
+      language: "he",
+      title: "Exercise snacks and cardiometabolic health",
+      topic: "exercise-snacks",
+      intervention: "Participants performed brief exercise snacks.",
+      population: "Inactive adults",
+    }),
+  );
+  assert.equal(generic.activity, "exercise-snack");
+  const hebrew = buildResearchImageAlt(generic, "he");
+  const english = buildResearchImageAlt(generic, "en");
+  assert.match(hebrew, /חטיף תנועה|חטיפי תנועה/);
+  assert.doesNotMatch(hebrew, /נשנוש כושר|נשנושי כושר|נשנושי הכושר/);
+  assert.equal(HEBREW.test(english), false);
+  assert.match(english, /exercise|bout/i);
+
+  const stairs = buildResearchVisualBrief(
+    research({
+      title: "Stair climbing exercise snacks",
+      intervention: "Participants climbed stairs.",
+      population: "Inactive adults",
+    }),
+  );
+  assert.equal(stairs.activity, "stair-climbing");
+  const stairAlt = buildResearchImageAlt(stairs, "he");
+  assert.match(stairAlt, /מדרגות/);
+  assert.doesNotMatch(stairAlt, /חטיף תנועה|חטיפי תנועה|נשנוש כושר/);
+});
+
 test("older adults and disease context change the scene without depicting the disease", () => {
   const older = buildResearchVisualBrief(
     research({

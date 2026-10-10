@@ -1,5 +1,6 @@
 import type { LandingContent } from "@/content/types";
 import { Reveal } from "@/components/landing/Reveal";
+import { LatinParentheticals } from "@/components/site/LatinParentheticals";
 
 type ConceptProps = {
   content: LandingContent["concept"];
@@ -11,7 +12,9 @@ export function Concept({ content }: ConceptProps) {
       <div className="wrap concept-panel">
         <div>
           <Reveal className="section-kicker">{content.kicker}</Reveal>
-          <Reveal as="h2">{content.heading}</Reveal>
+          <Reveal as="h2">
+            <LatinParentheticals text={content.heading} />
+          </Reveal>
           <Reveal as="p" className="section-lead">
             {content.lead}
           </Reveal>

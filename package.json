@@ -15,7 +15,8 @@
     "research:enrich": "tsx scripts/enrich-research.ts",
     "research:editorial-backfill": "tsx scripts/backfill-research-editorial-status.ts",
     "research:image-backfill": "tsx scripts/backfill-research-images.ts",
-    "translate:he": "tsx scripts/translate-he.ts"
+    "translate:he": "tsx scripts/translate-he.ts",
+    "terminology:migrate": "tsx scripts/migrate-hebrew-movement-snacks-terminology.ts"
   },
   "dependencies": {
     "@portabletext/react": "^8.0.1",

@@ -43,9 +43,9 @@ const HEBREW_ACTION: Record<ActivityId, { masculine: string; feminine: string; p
     plural: "המבצעים פרץ קצר של תנועה נמרצת ביום-יום",
   },
   "exercise-snack": {
-    masculine: "המבצע מקטע אימון קצר",
-    feminine: "המבצעת מקטע אימון קצר",
-    plural: "המבצעים מקטע אימון קצר",
+    masculine: "המבצע חטיף תנועה קצר",
+    feminine: "המבצעת חטיף תנועה קצר",
+    plural: "המבצעים חטיפי תנועה קצרים",
   },
   "general-activity": {
     masculine: "המבצע פעילות גופנית קצרה",
@@ -72,7 +72,7 @@ const HEBREW_NONE: Record<ActivityId, string> = {
   resistance: "איור של מרחב לתרגיל התנגדות קצר, ללא אדם בתמונה.",
   "sedentary-interruption": "איור של עמדת עבודה להפסקת תנועה קצרה, ללא אדם בתמונה.",
   vilpa: "איור של סביבה יומיומית לפרץ קצר של תנועה נמרצת, ללא אדם בתמונה.",
-  "exercise-snack": "איור של סביבה למקטע אימון קצר, ללא אדם בתמונה.",
+  "exercise-snack": "איור של סביבה לחטיף תנועה קצר, ללא אדם בתמונה.",
   "general-activity": "איור של סביבה לפעילות גופנית קצרה, ללא אדם בתמונה.",
 };
 

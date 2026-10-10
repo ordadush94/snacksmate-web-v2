@@ -1106,6 +1106,10 @@ html[dir="rtl"] .related-study-label { letter-spacing: 0; }
   margin-bottom: 28px;
   max-width: 52ch;
 }
+.latin-parenthetical {
+  unicode-bidi: isolate;
+  white-space: nowrap;
+}
 .research-filters {
   display: grid;
   gap: 12px;

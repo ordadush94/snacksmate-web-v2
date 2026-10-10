@@ -18,18 +18,28 @@ export const HEBREW_SCIENTIFIC_GLOSSARY: readonly GlossaryEntry[] = [
   {
     id: "exercise-snacking",
     sources: ["exercise snacking", "exercise-snacking"],
-    hebrew: ["נשנושי כושר", "ביצוע נשנושי כושר"],
-    usage: "Use נשנושי כושר or ביצוע נשנושי כושר according to grammar.",
+    hebrew: [
+      "חטיפי תנועה",
+      "ביצוע חטיפי תנועה",
+      "שילוב חטיפי תנועה במהלך היום",
+      "התערבות המבוססת על חטיפי תנועה",
+    ],
+    usage:
+      "Choose the form that fits the grammar. exercise-snacking intervention → התערבות המבוססת על חטיפי תנועה. Performing the snacks → ביצוע חטיפי תנועה. Spreading them through the day → שילוב חטיפי תנועה במהלך היום. Do not write התערבות חטיף תנועה.",
   },
   {
     id: "exercise-snacks",
     sources: ["exercise snacks", "exercise-snacks"],
-    hebrew: ["נשנושי כושר"],
+    hebrew: ["חטיפי תנועה"],
+    usage:
+      "Plural. exercise snacks throughout the day → חטיפי תנועה לאורך היום. participants performed exercise snacks → המשתתפים ביצעו חטיפי תנועה. short exercise snacks → חטיפי תנועה קצרים. exercise snack protocols → פרוטוקולים של חטיפי תנועה. stair-climbing exercise snacks → חטיפי תנועה המבוססים על עלייה במדרגות.",
   },
   {
     id: "exercise-snack",
     sources: ["exercise snack", "exercise-snack"],
-    hebrew: ["נשנוש כושר"],
+    hebrew: ["חטיף תנועה"],
+    usage:
+      "Singular. a two-minute exercise snack → חטיף תנועה של שתי דקות. cycling exercise snack → חטיף תנועה ברכיבה. exercise snack protocol → פרוטוקול של חטיף תנועה.",
   },
   {
     id: "vilpa-phrase",
@@ -196,7 +206,56 @@ export const FORBIDDEN_HEBREW_LITERALS = [
   {
     id: "exercise-snack-literal",
     pattern: "נשנוש תרגיל",
-    reason: "Use נשנוש כושר.",
+    reason: "Use חטיף תנועה.",
+  },
+  {
+    id: "outdated-exercise-snack",
+    pattern: "נשנוש כושר",
+    reason: "Outdated public terminology. Use חטיף תנועה.",
+    allowInHistoricalContent: true,
+  },
+  {
+    id: "outdated-exercise-snacks",
+    pattern: "נשנושי כושר",
+    reason: "Outdated public terminology. Use חטיפי תנועה.",
+    allowInHistoricalContent: true,
+  },
+  {
+    id: "outdated-definite-exercise-snack",
+    pattern: "נשנוש הכושר",
+    reason: "Outdated public terminology. Use חטיף התנועה.",
+    allowInHistoricalContent: true,
+  },
+  {
+    id: "outdated-definite-exercise-snacks",
+    pattern: "נשנושי הכושר",
+    reason: "Outdated public terminology. Use חטיפי התנועה.",
+    allowInHistoricalContent: true,
+  },
+  {
+    id: "stacked-exercise-snack",
+    pattern: "חטיפי תנועה כושר",
+    reason: "Do not stack the new term with כושר.",
+  },
+  {
+    id: "awkward-intervention",
+    pattern: "התערבות חטיף תנועה",
+    reason: "Use התערבות המבוססת על חטיפי תנועה.",
+  },
+  {
+    id: "broken-plural",
+    pattern: "חטיף תנועהים",
+    reason: "Use חטיפי תנועה for the plural.",
+  },
+  {
+    id: "awkward-activity-genitive",
+    pattern: "חטיפי תנועה של פעילות",
+    reason: "Name the activity directly, for example חטיף תנועה ברכיבה.",
+  },
+  {
+    id: "broken-performance-plural",
+    pattern: "ביצוע של חטיף תנועהים",
+    reason: "Use ביצוע חטיפי תנועה.",
   },
   {
     id: "umbrella-literal",

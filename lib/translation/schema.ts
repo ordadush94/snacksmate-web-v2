@@ -110,7 +110,7 @@ export const RESEARCH_TRANSLATION_JSON_SCHEMA = {
     seoDescription: {
       type: "string",
       description:
-        "Hebrew search description of about 140 to 160 characters. Include נשנושי כושר only when it fits naturally.",
+        "Hebrew search description of about 140 to 160 characters. Include חטיפי תנועה only when it fits naturally.",
     },
     population: {
       type: "string",
