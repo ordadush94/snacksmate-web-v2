@@ -18,6 +18,7 @@ import { createClient, type SanityClient } from "@sanity/client";
 import { pathToFileURL } from "node:url";
 
 import {
+  formatDraftDiscoveryReport,
   formatTerminologyMigrationReport,
   planTerminologyMigration,
   type TerminologyDocumentPlan,
@@ -66,6 +67,9 @@ async function main(): Promise<void> {
   console.log("");
   if (client) {
     console.log("Read perspective: raw (published documents and drafts).");
+    const hidden = await unpublishedOverlayCandidates();
+    console.log(formatDraftDiscoveryReport(documents, plan, hidden));
+    console.log("");
   } else {
     console.log("Read perspective: published.");
     console.log("SANITY_WRITE_TOKEN is not set, so Hebrew drafts were not read.");
@@ -77,7 +81,7 @@ async function main(): Promise<void> {
       for (const id of hidden) console.log(`- ${id}`);
     }
   }
-  console.log("Published by this script: 0");
+  console.log("Published by script: 0");
 
   if (!write) {
     console.log("Dry-run only. No Sanity document was changed.");
@@ -139,7 +143,7 @@ async function writePatches(client: SanityClient, plans: readonly TerminologyDoc
     console.log(`Patched ${plan.id} (${plan.publication}).`);
   }
   console.log(`Documents patched: ${patched}`);
-  console.log("Published by this script: 0");
+  console.log("Published by script: 0");
 }
 
 const invokedDirectly =
