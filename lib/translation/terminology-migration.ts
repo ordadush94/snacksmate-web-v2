@@ -74,6 +74,8 @@ export type TerminologyDocumentPlan = {
 
 export type TerminologyMigrationPlan = {
   documentsScanned: number;
+  publishedScanned: number;
+  draftsScanned: number;
   researchAffected: number;
   articlesAffected: number;
   publishedAffected: number;
@@ -144,6 +146,8 @@ export function planTerminologyMigration(documents: readonly unknown[]): Termino
   const changing = plans.filter((plan) => plan.changes.length > 0);
   return {
     documentsScanned: plans.length,
+    publishedScanned: plans.filter((plan) => plan.publication === "published").length,
+    draftsScanned: plans.filter((plan) => plan.publication === "draft").length,
     researchAffected: new Set(changing.filter((plan) => plan.type === "research").map((plan) => plan.id)).size,
     articlesAffected: new Set(changing.filter((plan) => plan.type === "article").map((plan) => plan.id)).size,
     publishedAffected: new Set(changing.filter((plan) => plan.publication === "published").map((plan) => plan.id)).size,
@@ -163,23 +167,25 @@ export function planTerminologyMigration(documents: readonly unknown[]): Termino
 }
 
 export function formatTerminologyMigrationReport(plan: TerminologyMigrationPlan, mode: "dry-run" | "write"): string {
+  const blockedCount = plan.plans.reduce((sum, item) => sum + item.blocked.length, 0);
   const lines = [
     `Mode: ${mode}`,
-    "Sanity writes: " + (mode === "write" ? "requested" : "none"),
     "Publishing: no",
-    `Documents scanned: ${plan.documentsScanned}`,
-    `Research documents affected: ${plan.researchAffected}`,
-    `Update documents affected: ${plan.articlesAffected}`,
+    `Published documents scanned: ${plan.publishedScanned}`,
+    `Draft documents scanned: ${plan.draftsScanned}`,
     `Published documents affected: ${plan.publishedAffected}`,
     `Draft documents affected: ${plan.draftsAffected}`,
-    `Fields that would change: ${plan.fieldsThatWouldChange}`,
-    `Old exact terminology before: ${plan.readerFacingExactBefore}`,
-    `Bare product-unit נשנוש occurrences before: ${plan.bareProductUnitBefore}`,
-    `Reader-facing old terminology after proposed migration: ${plan.readerFacingExactAfter}`,
-    `Reader-facing bare product-unit נשנוש after proposed migration: ${plan.bareProductUnitAfter}`,
-    `Exact terminology in all document text before, including internal notes: ${plan.outdatedBefore}`,
-    `Exact terminology in all document text after proposed migration: ${plan.outdatedAfter}`,
-    `Exact terminology left outside the allowlist: ${unchangedOutdatedCount(plan)}`,
+    `Fields affected: ${plan.fieldsThatWouldChange}`,
+    `Reader-facing old terminology before: ${plan.readerFacingExactBefore}`,
+    `Reader-facing old terminology after: ${plan.readerFacingExactAfter}`,
+    `Bare product-unit נשנוש before: ${plan.bareProductUnitBefore}`,
+    `Bare product-unit נשנוש after: ${plan.bareProductUnitAfter}`,
+    `Internal-only old terminology remaining: ${unchangedOutdatedCount(plan)}`,
+    `Blocked: ${blockedCount}`,
+    "Sanity writes: " + (mode === "write" ? "requested" : "0"),
+    "Published by script: 0",
+    `Research documents affected: ${plan.researchAffected}`,
+    `Update documents affected: ${plan.articlesAffected}`,
     "",
     ...contextualSection(plan),
   ];
@@ -211,6 +217,62 @@ export function formatTerminologyMigrationReport(plan: TerminologyMigrationPlan,
     }
   }
   return lines.join("\n");
+}
+
+/**
+ * Drafts returned by an authenticated raw read. The unauthenticated published
+ * query never includes them. Hidden published ids are the ones the public
+ * drafts perspective omitted, which is how an overlay shows up without a token.
+ */
+export function formatDraftDiscoveryReport(
+  documents: readonly unknown[],
+  plan: TerminologyMigrationPlan,
+  hiddenPublishedIds: readonly string[],
+): string {
+  const lines = ["Draft overlays not visible in the unauthenticated scan:", ""];
+  const byId = new Map(plan.plans.map((item) => [item.id, item]));
+  const draftIds = documents.map((document) => documentId(document)).filter((id) => id.startsWith("drafts."));
+  if (hiddenPublishedIds.length === 0 && draftIds.length === 0) {
+    lines.push("None");
+    return lines.join("\n");
+  }
+  const seen = new Set<string>();
+  for (const id of hiddenPublishedIds) {
+    const draftId = id.startsWith("drafts.") ? id : `drafts.${id}`;
+    seen.add(draftId);
+    lines.push(...draftChangeBlock(draftId, byId.get(draftId), true));
+  }
+  for (const id of draftIds) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    lines.push(...draftChangeBlock(id, byId.get(id), false));
+  }
+  return lines.join("\n");
+}
+
+function draftChangeBlock(
+  id: string,
+  item: TerminologyDocumentPlan | undefined,
+  hiddenOverlay: boolean,
+): string[] {
+  const lines = [
+    `Document id: ${id}`,
+    hiddenOverlay
+      ? "Visibility: hidden from the unauthenticated drafts perspective"
+      : "Visibility: returned only by the authenticated read",
+  ];
+  const changes = item?.changes ?? [];
+  if (changes.length === 0) {
+    lines.push("Proposed field changes: none", "");
+    return lines;
+  }
+  for (const change of changes) {
+    lines.push(`Field: ${change.field}`);
+    lines.push(`Before: ${change.before}`);
+    lines.push(`After: ${change.after}`);
+    lines.push("");
+  }
+  return lines;
 }
 
 function contextualSection(plan: TerminologyMigrationPlan): string[] {

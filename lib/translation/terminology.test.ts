@@ -6,7 +6,12 @@ import { fileURLToPath } from "node:url";
 
 import { FORBIDDEN_HEBREW_LITERALS } from "./glossary";
 import { suspiciousLiteralWarnings } from "./quality";
-import { planTerminologyMigration, STATIC_CONTEXTUAL_REWRITES } from "./terminology-migration";
+import {
+  formatDraftDiscoveryReport,
+  formatTerminologyMigrationReport,
+  planTerminologyMigration,
+  STATIC_CONTEXTUAL_REWRITES,
+} from "./terminology-migration";
 import {
   AWKWARD_EXERCISE_SNACK_HEBREW,
   CONTEXTUAL_REPLACEMENTS,
@@ -153,6 +158,8 @@ test("the Sanity plan patches reader-facing Hebrew and leaves identity fields al
 
   const plan = planTerminologyMigration(documents);
   assert.equal(plan.documentsScanned, 2);
+  assert.equal(plan.publishedScanned, 1);
+  assert.equal(plan.draftsScanned, 1);
   assert.equal(plan.researchAffected, 1);
   assert.equal(plan.articlesAffected, 1);
   assert.equal(plan.publishedAffected, 1);
@@ -334,4 +341,43 @@ test("static Hebrew sources use the reviewed replacements", () => {
     assert.ok(rule);
     assert.equal(source.includes(rule.to), true, `${item.file} missing ${rule.to}`);
   }
+});
+
+test("the dry-run summary names published and draft scans, and lists hidden draft changes", () => {
+  const documents = [
+    {
+      _id: "research-he-hidden",
+      _type: "research",
+      language: "he",
+      excerpt: "נשנוש כושר קצר",
+      translationReviewNote: "Old note: נשנוש כושר",
+    },
+    {
+      _id: "drafts.research-he-hidden",
+      _type: "research",
+      language: "he",
+      excerpt: "נשנושי ספרינטים",
+    },
+  ];
+  const plan = planTerminologyMigration(documents);
+  const report = formatTerminologyMigrationReport(plan, "dry-run");
+  assert.match(report, /Published documents scanned: 1/);
+  assert.match(report, /Draft documents scanned: 1/);
+  assert.match(report, /Published documents affected: 1/);
+  assert.match(report, /Draft documents affected: 1/);
+  assert.match(report, /Reader-facing old terminology after: 0/);
+  assert.match(report, /Bare product-unit נשנוש after: 0/);
+  assert.match(report, /Internal-only old terminology remaining: 1/);
+  assert.match(report, /Blocked: 0/);
+  assert.match(report, /Sanity writes: 0/);
+  assert.match(report, /Published by script: 0/);
+  assert.equal(report.includes(".publish("), false);
+
+  const discovery = formatDraftDiscoveryReport(documents, plan, ["research-he-hidden"]);
+  assert.match(discovery, /Document id: drafts.research-he-hidden/);
+  assert.match(discovery, /Visibility: hidden from the unauthenticated drafts perspective/);
+  assert.match(discovery, /Field: excerpt/);
+  assert.match(discovery, /Before: נשנושי ספרינטים/);
+  assert.match(discovery, /After: חטיפי תנועה בספרינטים/);
+  assert.equal(discovery.includes("translationReviewNote"), false);
 });

@@ -1,0 +1,83 @@
+name: Hebrew Terminology Migration
+
+# SAFETY: manual only. There is no schedule.
+# Dry-run is the default. With SANITY_WRITE_TOKEN it reads published Hebrew
+# documents and drafts, then writes nothing.
+# A write is possible only when mode is write AND confirm_write is exactly
+# MIGRATE HEBREW TERMINOLOGY.
+# The script patches allowlisted reader-facing fields on existing documents.
+# It never publishes. Draft documents stay drafts.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: dry-run reads published documents and drafts. write patches allowlisted fields and never publishes.
+        type: choice
+        options:
+          - dry-run
+          - write
+        default: dry-run
+      confirm_write:
+        description: Type MIGRATE HEBREW TERMINOLOGY to allow production writes.
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    name: Hebrew terminology migration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Migrate Hebrew terminology
+        env:
+          NEXT_PUBLIC_SANITY_PROJECT_ID: 8wc8eouj
+          NEXT_PUBLIC_SANITY_DATASET: production
+          NEXT_PUBLIC_SANITY_API_VERSION: "2026-09-22"
+          SANITY_WRITE_TOKEN: ${{ secrets.SANITY_WRITE_TOKEN }}
+          MODE: ${{ github.event.inputs.mode }}
+          CONFIRM_WRITE: ${{ github.event.inputs.confirm_write }}
+        run: |
+          echo "Hebrew Terminology Migration is manual. It never publishes."
+          if [ -z "$SANITY_WRITE_TOKEN" ]; then
+            echo "Refusing to run. The Sanity write secret is not set."
+            echo "This run stopped before any Sanity mutation."
+            echo "Sanity writes: 0"
+            echo "Published by script: 0"
+            exit 1
+          fi
+          if [ "$MODE" = "write" ]; then
+            if [ "$CONFIRM_WRITE" != "MIGRATE HEBREW TERMINOLOGY" ]; then
+              echo "Refusing to write. confirm_write must equal exactly: MIGRATE HEBREW TERMINOLOGY"
+              echo "This run stopped before any Sanity mutation."
+              echo "Sanity writes: 0"
+              echo "Published by script: 0"
+              exit 1
+            fi
+            echo "Mode: write. Allowlisted fields only. Drafts stay drafts. This does not publish."
+            npm run terminology:migrate -- --write
+          elif [ "$MODE" = "dry-run" ]; then
+            echo "Mode: dry-run. No Sanity documents will be changed or published."
+            npm run terminology:migrate
+          else
+            echo "Refusing unknown mode."
+            echo "This run stopped before any Sanity mutation."
+            echo "Sanity writes: 0"
+            echo "Published by script: 0"
+            exit 1
+          fi
