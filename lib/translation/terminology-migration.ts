@@ -4,9 +4,14 @@
  */
 
 import {
+  CONTEXTUAL_REPLACEMENTS,
+  classifyBareSnacks,
+  contextualRulesUsed,
+  countBareProductUnitSnacks,
   countOutdatedPublicTerminology,
   migrateHebrewExerciseSnackText,
   migrationProblems,
+  type ContextualReplacement,
 } from "./terminology";
 
 function unchangedOutdatedCount(plan: TerminologyMigrationPlan): number {
@@ -76,8 +81,52 @@ export type TerminologyMigrationPlan = {
   fieldsThatWouldChange: number;
   outdatedBefore: number;
   outdatedAfter: number;
+  /** Exact נשנוש כושר forms in reader-facing fields, before the proposed patch. */
+  readerFacingExactBefore: number;
+  /** Exact נשנוש כושר forms in reader-facing fields after the proposed patch. */
+  readerFacingExactAfter: number;
+  /** Bare נשנוש that names the Snacksmate activity unit, reader-facing, before. */
+  bareProductUnitBefore: number;
+  /** Bare product-unit נשנוש in reader-facing fields after the proposed patch. */
+  bareProductUnitAfter: number;
+  /** Reader-facing strings that still contain נשנוש after the proposed patch. */
+  readerFacingRemainder: string[];
   plans: TerminologyDocumentPlan[];
 };
+
+/** Source-file phrases already rewritten in this pass. Printed with the dry-run. */
+export const STATIC_CONTEXTUAL_REWRITES: readonly { file: string; field: string; from: string }[] = [
+  { file: "content/he.ts", field: "concept.highlight", from: "נשנושים קטנים. השפעה גדולה." },
+  { file: "content/he.ts", field: "howItWorks.steps[0].title", from: "בוחרים נשנוש" },
+  { file: "content/he.ts", field: "howItWorks.steps[2].body", from: "כל נשנוש נספר" },
+  { file: "content/he.ts", field: "benefits.lead", from: "נשנוש קטן נותן בוסט גדול" },
+  { file: "content/he.ts", field: "benefits.items[1].body", from: "כל נשנוש שהושלם" },
+  { file: "content/he.ts", field: "download.heading", from: "הנשנוש הראשון שלכם מחכה." },
+  { file: "content/he.ts", field: "download.lead", from: "בחרו נשנוש של כמה דקות" },
+  { file: "content/he.ts", field: "footer.copyright", from: "נשנושים קטנים. השפעה גדולה." },
+  { file: "legacy-site/index (1).html", field: "concept highlight", from: "נשנושים קטנים. השפעה גדולה." },
+  { file: "legacy-site/index (1).html", field: "how it works step title", from: "בוחרים נשנוש" },
+  { file: "legacy-site/index (1).html", field: "how it works habit step", from: "כל נשנוש נספר" },
+  { file: "legacy-site/index (1).html", field: "benefits lead", from: "נשנוש קטן נותן בוסט גדול" },
+  { file: "legacy-site/index (1).html", field: "benefits completed item", from: "כל נשנוש שהושלם" },
+  { file: "legacy-site/index (1).html", field: "download heading", from: "הנשנוש הראשון שלכם מחכה." },
+  { file: "legacy-site/index (1).html", field: "download lead", from: "בחרו נשנוש של כמה דקות" },
+  { file: "legacy-site/index (1).html", field: "footer", from: "נשנושים קטנים. השפעה גדולה." },
+  { file: "scripts/update-drafts.ts", field: "hebrewBodies.release session menu", from: "נשנוש קצר לכל הגוף, נשנוש כוח או נשנוש אינטרוולים קצר" },
+  { file: "scripts/update-drafts.ts", field: "hebrewBodies.release shown session", from: "הנשנוש שמופיע" },
+  { file: "scripts/update-drafts.ts", field: "hebrewBodies.release weekly goal", from: "יעד שבועי של נשנושים" },
+  { file: "scripts/update-drafts.ts", field: "hebrewBodies.release snacks earned", from: "והנשנושים שצברתם" },
+  { file: "scripts/update-drafts.ts", field: "hebrewBodies.release weekly count", from: "סופר נשנושים" },
+  { file: "scripts/update-drafts.ts", field: "hebrewBodies.custom movements", from: "אילו תנועות נכנסות לנשנוש" },
+  { file: "scripts/update-drafts.ts", field: "hebrewBodies.custom adapts", from: "הנשנוש צריך לזוז יחד איתם" },
+  { file: "scripts/update-drafts.ts", field: "hebrewBodies.custom build", from: "בונים נשנוש משלכם" },
+  { file: "scripts/update-drafts.ts", field: "hebrewBodies.preferences keep session", from: "בלי לוותר על הנשנוש" },
+  { file: "scripts/update-drafts.ts", field: "preferences seoDescription", from: "בלי לוותר על הנשנוש" },
+  { file: "scripts/update-drafts.ts", field: "hebrewBodies.effort when it ends", from: "כשהנשנוש נגמר" },
+  { file: "scripts/update-drafts.ts", field: "hebrewBodies.effort very easy", from: "שהנשנוש בקושי עלה" },
+  { file: "scripts/update-drafts.ts", field: "hebrewBodies.effort the session", from: "הנשנוש היה המפגש" },
+  { file: "scripts/update-drafts.ts", field: "hebrewBodies.effort worth it", from: "אם הנשנוש היה שווה" },
+];
 
 type MutablePlan = {
   changes: TerminologyChange[];
@@ -108,6 +157,7 @@ export function planTerminologyMigration(documents: readonly unknown[]): Termino
       const plan = plans.find((item) => item.id === documentId(document));
       return sum + countOutdatedPublicTerminology(collectText(applyPlan(document, plan)));
     }, 0),
+    ...readerFacingCounts(documents, plans),
     plans: affected,
   };
 }
@@ -123,11 +173,15 @@ export function formatTerminologyMigrationReport(plan: TerminologyMigrationPlan,
     `Published documents affected: ${plan.publishedAffected}`,
     `Draft documents affected: ${plan.draftsAffected}`,
     `Fields that would change: ${plan.fieldsThatWouldChange}`,
-    `Old terminology occurrences before: ${plan.outdatedBefore}`,
-    `Old terminology occurrences after proposed migration: ${plan.outdatedAfter}`,
-    `Reader-facing occurrences after proposed migration: ${plan.outdatedAfter - unchangedOutdatedCount(plan)}`,
-    `Occurrences left outside the allowlist: ${unchangedOutdatedCount(plan)}`,
+    `Old exact terminology before: ${plan.readerFacingExactBefore}`,
+    `Bare product-unit נשנוש occurrences before: ${plan.bareProductUnitBefore}`,
+    `Reader-facing old terminology after proposed migration: ${plan.readerFacingExactAfter}`,
+    `Reader-facing bare product-unit נשנוש after proposed migration: ${plan.bareProductUnitAfter}`,
+    `Exact terminology in all document text before, including internal notes: ${plan.outdatedBefore}`,
+    `Exact terminology in all document text after proposed migration: ${plan.outdatedAfter}`,
+    `Exact terminology left outside the allowlist: ${unchangedOutdatedCount(plan)}`,
     "",
+    ...contextualSection(plan),
   ];
 
   const research = plan.plans.filter((item) => item.type === "research");
@@ -138,7 +192,10 @@ export function formatTerminologyMigrationReport(plan: TerminologyMigrationPlan,
   const skipped = plan.plans.flatMap((item) =>
     item.skipped.map((skip) => `${item.id} (${item.publication}) ${skip.field}: ${skip.text}`),
   );
-  lines.push("Not patched (outside the allowlist):");
+  lines.push("Reader-facing נשנוש remaining after proposed migration:");
+  lines.push(plan.readerFacingRemainder.length === 0 ? "None" : plan.readerFacingRemainder.join("\n"));
+  lines.push("");
+  lines.push("Not patched (outside the allowlist, including internal review notes):");
   lines.push(skipped.length === 0 ? "None" : skipped.join("\n"));
   lines.push("");
 
@@ -154,6 +211,133 @@ export function formatTerminologyMigrationReport(plan: TerminologyMigrationPlan,
     }
   }
   return lines.join("\n");
+}
+
+function contextualSection(plan: TerminologyMigrationPlan): string[] {
+  const lines = ["## Contextual rewrites in this pass", ""];
+  lines.push("Source files already updated. These are not Sanity writes.");
+  lines.push("");
+  for (const item of STATIC_CONTEXTUAL_REWRITES) {
+    const rule = contextualRule(item.from);
+    lines.push(`File: ${item.file}`);
+    lines.push(`Field: ${item.field}`);
+    lines.push(`Before: ${rule.from}`);
+    lines.push(`After: ${rule.to}`);
+    lines.push(`Reason: ${rule.reason}`);
+    lines.push("");
+  }
+  lines.push("Sanity documents. Proposed only. Nothing is written in a dry-run.");
+  lines.push("");
+  const changes = plan.plans.flatMap((item) =>
+    [...item.changes, ...item.blocked].flatMap((change) => {
+      const rules = contextualRulesUsed(change.before);
+      return rules.length > 0 ? [{ change, rules }] : [];
+    }),
+  );
+  if (changes.length === 0) {
+    lines.push("None");
+    lines.push("");
+    return lines;
+  }
+  for (const { change, rules } of changes) {
+    lines.push(`Document: ${change.id}`);
+    lines.push(`Field: ${change.field}`);
+    lines.push(`Before: ${change.before}`);
+    lines.push(`After: ${change.after}`);
+    for (const rule of rules) lines.push(`Reason: ${rule.reason}`);
+    lines.push("");
+  }
+  return lines;
+}
+
+function contextualRule(from: string): ContextualReplacement {
+  const rule = CONTEXTUAL_REPLACEMENTS.find((item) => item.from === from);
+  if (!rule) throw new Error(`Missing contextual rule for: ${from}`);
+  return rule;
+}
+
+function readerFacingCounts(
+  documents: readonly unknown[],
+  plans: readonly TerminologyDocumentPlan[],
+): Pick<
+  TerminologyMigrationPlan,
+  "readerFacingExactBefore" | "readerFacingExactAfter" | "bareProductUnitBefore" | "bareProductUnitAfter" | "readerFacingRemainder"
+> {
+  let readerFacingExactBefore = 0;
+  let readerFacingExactAfter = 0;
+  let bareProductUnitBefore = 0;
+  let bareProductUnitAfter = 0;
+  const readerFacingRemainder: string[] = [];
+  for (const document of documents) {
+    const id = documentId(document);
+    const plan = plans.find((item) => item.id === id);
+    for (const part of readerFacingParts(document)) {
+      readerFacingExactBefore += countOutdatedPublicTerminology(part.text);
+      bareProductUnitBefore += countBareProductUnitSnacks(part.text);
+    }
+    for (const part of readerFacingParts(applyPlan(document, plan))) {
+      readerFacingExactAfter += countOutdatedPublicTerminology(part.text);
+      bareProductUnitAfter += countBareProductUnitSnacks(part.text);
+      if (part.text.includes("נשנוש")) {
+        readerFacingRemainder.push(`${id} ${part.field} (${remainderReason(part.text)}): ${part.text}`);
+      }
+    }
+  }
+  return {
+    readerFacingExactBefore,
+    readerFacingExactAfter,
+    bareProductUnitBefore,
+    bareProductUnitAfter,
+    readerFacingRemainder,
+  };
+}
+
+function remainderReason(text: string): string {
+  const found = classifyBareSnacks(text);
+  const reasons: string[] = [];
+  if (countOutdatedPublicTerminology(text) > 0) reasons.push("exact outdated term still present");
+  if (found.some((item) => item.kind === "product")) reasons.push("bare product-unit");
+  if (found.some((item) => item.kind === "food")) reasons.push("food meaning, left unchanged");
+  if (found.some((item) => item.kind === "tai-chi")) reasons.push("tai chi arm, left unchanged");
+  if (reasons.length === 0) reasons.push("unclassified נשנוש");
+  return reasons.join("; ");
+}
+
+function readerFacingParts(document: unknown): Array<{ field: string; text: string }> {
+  if (!isRecord(document)) return [];
+  const type = document._type === "article" || document._type === "research" ? document._type : null;
+  if (!type || document.language !== "he") return [];
+  const parts: Array<{ field: string; text: string }> = [];
+  const stringFields = type === "research" ? RESEARCH_STRING_FIELDS : ARTICLE_STRING_FIELDS;
+  for (const field of stringFields) {
+    const value = document[field];
+    if (typeof value === "string") parts.push({ field, text: value });
+  }
+  if (type === "research" && Array.isArray(document.outcomes)) {
+    document.outcomes.forEach((item, index) => {
+      if (typeof item === "string") parts.push({ field: `outcomes[${index}]`, text: item });
+    });
+  }
+  const portableFields = type === "research" ? RESEARCH_PORTABLE_FIELDS : ARTICLE_PORTABLE_FIELDS;
+  for (const field of portableFields) {
+    const value = document[field];
+    if (!Array.isArray(value)) continue;
+    value.forEach((block, blockIndex) => {
+      if (!isRecord(block) || !Array.isArray(block.children)) return;
+      block.children.forEach((child, childIndex) => {
+        if (isRecord(child) && typeof child.text === "string") {
+          parts.push({
+            field: `${field}[${blockIndex}].children[${childIndex}].text`,
+            text: child.text,
+          });
+        }
+      });
+    });
+  }
+  if (isRecord(document.mainImage) && typeof document.mainImage.alt === "string") {
+    parts.push({ field: "mainImage.alt", text: document.mainImage.alt });
+  }
+  return parts;
 }
 
 function section(title: string, plans: readonly TerminologyDocumentPlan[]): string[] {
@@ -343,7 +527,7 @@ function collectSkipped(state: MutablePlan, document: Record<string, unknown>, t
 
 function walkSkipped(state: MutablePlan, field: string, value: unknown): void {
   if (typeof value === "string") {
-    if (countOutdatedPublicTerminology(value) > 0) state.skipped.push({ field, text: value });
+    if (value.includes("נשנוש")) state.skipped.push({ field, text: value });
     return;
   }
   if (Array.isArray(value)) {

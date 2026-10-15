@@ -1,14 +1,18 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { FORBIDDEN_HEBREW_LITERALS } from "./glossary";
 import { suspiciousLiteralWarnings } from "./quality";
-import { planTerminologyMigration } from "./terminology-migration";
+import { planTerminologyMigration, STATIC_CONTEXTUAL_REWRITES } from "./terminology-migration";
 import {
   AWKWARD_EXERCISE_SNACK_HEBREW,
+  CONTEXTUAL_REPLACEMENTS,
   EXERCISE_SNACK_HEBREW_EXAMPLES,
   OUTDATED_PUBLIC_HEBREW_TERMS,
+  bareProductUnitSnackWarnings,
   migrateHebrewExerciseSnackText,
 } from "./terminology";
 
@@ -49,7 +53,7 @@ test("existing Hebrew migrates without stacking or breaking plurals", () => {
   assert.equal(migrateHebrewExerciseSnackText("נשנוש הכושר הבא"), "חטיף התנועה הבא");
   assert.equal(
     migrateHebrewExerciseSnackText("נשנושי כושר, נשנושי טאי צ'י"),
-    "חטיפי תנועה, נשנושי טאי צ'י",
+    "חטיפי תנועה, מקטעי טאי צ'י קצרים",
   );
   assert.equal(migrateHebrewExerciseSnackText("איור של אדם עולה במדרגות"), "איור של אדם עולה במדרגות");
 
@@ -205,4 +209,129 @@ test("public English keeps exercise snack and Hebrew site copy drops the old ter
   }
   assert.equal(hebrew.includes("חטיפי תנועה (Exercise Snacks)"), true);
   assert.equal(research.includes("חטיפי תנועה (Exercise Snacks)"), true);
+  assert.equal(hebrew.includes("נשנוש"), false);
+  assert.equal(hebrew.includes("בוחרים חטיף תנועה"), true);
+  assert.equal(hebrew.includes("כל חטיף תנועה נספר"), true);
+  assert.equal(hebrew.includes("חטיפי תנועה קטנים. השפעה גדולה."), true);
+  assert.equal(hebrew.includes("חטיף התנועה הראשון שלכם מחכה."), true);
+});
+
+test("reviewed product-unit phrases migrate, and a food snack does not", () => {
+  assert.equal(migrateHebrewExerciseSnackText("בוחרים נשנוש"), "בוחרים חטיף תנועה");
+  assert.equal(migrateHebrewExerciseSnackText("כל נשנוש נספר"), "כל חטיף תנועה נספר");
+  assert.equal(migrateHebrewExerciseSnackText("נשנושי ספרינטים"), "חטיפי תנועה בספרינטים");
+  assert.equal(migrateHebrewExerciseSnackText("נשנושי העלייה במדרגות"), "חטיפי התנועה בעלייה במדרגות");
+  assert.equal(migrateHebrewExerciseSnackText("נשנושי טאי צ'י"), "מקטעי טאי צ'י קצרים");
+  assert.equal(
+    migrateHebrewExerciseSnackText(
+      "נשנושי פעילות גופנית באמצעות פעילות אירובית, תרגילי התנגדות או תרגילי שיווי משקל",
+    ),
+    "חטיפי תנועה באמצעות פעילות אירובית, תרגילי התנגדות או תרגילי שיווי משקל",
+  );
+  assert.equal(
+    migrateHebrewExerciseSnackText("קל מאוד אומר שהנשנוש בקושי עלה מעל שאר היום."),
+    "קל מאוד אומר שחטיף התנועה בקושי עלה מעל שאר היום.",
+  );
+  const activity = migrateHebrewExerciseSnackText(
+    "נשנושי פעילות גופנית באמצעות פעילות אירובית, תרגילי התנגדות או תרגילי שיווי משקל",
+  );
+  assert.equal(activity.includes("חטיפי תנועה של פעילות"), false);
+
+  const food = "אכלתי נשנוש מתוק בצהריים.";
+  assert.equal(migrateHebrewExerciseSnackText(food), food);
+  assert.deepEqual(bareProductUnitSnackWarnings(food), []);
+  assert.equal(bareProductUnitSnackWarnings("בוחרים נשנוש").length, 1);
+  assert.equal(
+    bareProductUnitSnackWarnings("נשנושי טאי צ'י").some((warning) => warning.includes("מקטעי טאי צ'י קצרים")),
+    true,
+  );
+});
+
+test("contextual phrases patch reader-facing fields and leave review notes", () => {
+  const href = "https://doi.org/10.1000/example";
+  const documents = [
+    {
+      _id: "article-food",
+      _type: "article",
+      language: "he",
+      excerpt: "אכלתי נשנוש מתוק בצהריים.",
+    },
+    {
+      _id: "research-he-research-pubmed-34157675",
+      _type: "research",
+      language: "he",
+      translationReviewNote: "Previous wording kept נשנושי טאי צ'י.",
+      intervention: [
+        {
+          _key: "b1",
+          _type: "block",
+          style: "normal",
+          markDefs: [],
+          children: [{ _key: "s1", _type: "span", marks: [], text: "נשנושי טאי צ'י לצד נשנושי כושר" }],
+        },
+      ],
+    },
+    {
+      _id: "research-he-research-pubmed-30847639",
+      _type: "research",
+      language: "he",
+      intervention: [
+        {
+          _key: "b1",
+          _type: "block",
+          style: "normal",
+          markDefs: [{ _key: "link1", _type: "link", href }],
+          children: [{ _key: "s1", _type: "span", marks: ["link1"], text: "נשנושי ספרינטים" }],
+        },
+      ],
+    },
+  ];
+
+  const plan = planTerminologyMigration(documents);
+  assert.equal(plan.documentsScanned, 3);
+  assert.equal(plan.articlesAffected, 0);
+  assert.equal(plan.researchAffected, 2);
+  assert.equal(plan.readerFacingExactAfter, 0);
+  assert.equal(plan.bareProductUnitAfter, 0);
+  assert.equal(plan.readerFacingRemainder.length, 1);
+  assert.match(plan.readerFacingRemainder[0] ?? "", /food meaning, left unchanged/);
+  assert.match(plan.readerFacingRemainder[0] ?? "", /אכלתי נשנוש מתוק/);
+  assert.equal(plan.plans.some((item) => item.id === "article-food"), false);
+
+  const taiChi = plan.plans.find((item) => item.id === "research-he-research-pubmed-34157675");
+  assert.ok(taiChi);
+  assert.equal("translationReviewNote" in taiChi.patch, false);
+  assert.equal(
+    taiChi.skipped.some((skip) => skip.field === "translationReviewNote" && skip.text.includes("נשנושי טאי צ'י")),
+    true,
+  );
+  const taiBlock = (taiChi.patch.intervention as Array<Record<string, unknown>>)[0];
+  assert.equal(taiBlock._key, "b1");
+  assert.equal(taiBlock.style, "normal");
+  const taiChildren = taiBlock.children as Array<Record<string, unknown>>;
+  assert.equal(taiChildren[0]._key, "s1");
+  assert.deepEqual(taiChildren[0].marks, []);
+  assert.equal(taiChildren[0].text, "מקטעי טאי צ'י קצרים לצד חטיפי תנועה");
+
+  const sprint = plan.plans.find((item) => item.id === "research-he-research-pubmed-30847639");
+  assert.ok(sprint);
+  const sprintBlock = (sprint.patch.intervention as Array<Record<string, unknown>>)[0];
+  assert.deepEqual(sprintBlock.markDefs, [{ _key: "link1", _type: "link", href }]);
+  const sprintChildren = sprintBlock.children as Array<Record<string, unknown>>;
+  assert.deepEqual(sprintChildren[0].marks, ["link1"]);
+  assert.equal(sprintChildren[0].text, "חטיפי תנועה בספרינטים");
+});
+
+test("static Hebrew sources use the reviewed replacements", () => {
+  const root = fileURLToPath(new URL("../../", import.meta.url));
+  const drafts = readFileSync(join(root, "scripts/update-drafts.ts"), "utf8");
+  assert.match(drafts, /exercise snacks/);
+  assert.equal(drafts.includes("נשנוש"), false);
+  for (const item of STATIC_CONTEXTUAL_REWRITES) {
+    const source = readFileSync(join(root, item.file), "utf8");
+    assert.equal(source.includes(item.from), false, `${item.file} still has ${item.from}`);
+    const rule = CONTEXTUAL_REPLACEMENTS.find((entry) => entry.from === item.from);
+    assert.ok(rule);
+    assert.equal(source.includes(rule.to), true, `${item.file} missing ${rule.to}`);
+  }
 });
