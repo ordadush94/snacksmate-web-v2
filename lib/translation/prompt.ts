@@ -129,6 +129,7 @@ function researchRules(): string {
     "Return an empty string for population, duration, or comparator when the English field is empty.",
     "Return an empty array for a Portable Text field that has no spans.",
     "Exercise snack terminology follows the glossary. One snack is חטיף תנועה. More than one is חטיפי תנועה. An exercise-snacking intervention is התערבות המבוססת על חטיפי תנועה.",
+    "A bare נשנוש, נשנושים, or נשנושי that names the Snacksmate activity unit is חטיף תנועה, חטיפי תנועה, חטיף התנועה, or חטיפי התנועה. Leave נשנוש when it means food. A separate tai chi arm is מקטעי טאי צ'י קצרים, not חטיפי תנועה.",
     "The Limitations heading already exists. Do not add a label such as Design-level limitation.",
     "Study design and topic are machine values. They are not in your output.",
   ].join("\n");
@@ -141,6 +142,7 @@ function articleRules(): string {
     "Return an empty array for body when there are no spans.",
     "Return an empty string for imageAlt when the English image has no alt text.",
     "Use חטיף תנועה or חטיפי תנועה only when the English is about exercise snacks and the Hebrew sentence needs the term. Do not add it to alt text that describes a visible action such as climbing stairs.",
+    "When the Hebrew names one Snacksmate session, write חטיף תנועה. When it names more than one, write חטיפי תנועה. Do not leave bare נשנוש for that activity unit. Leave נשנוש when it means food.",
   ].join("\n");
 }
 
@@ -152,6 +154,7 @@ export function buildRefinementInstructions(): string {
     "Use the original English for those fields and the current Hebrew.",
     "Preserve all facts, uncertainty, comparison direction, statistical meaning, numbers, units, and terminology.",
     "Replace outdated public Hebrew נשנוש כושר, נשנושי כושר, נשנוש הכושר, and נשנושי הכושר with חטיף תנועה or חטיפי תנועה, matching number and definiteness. Do not write חטיף תנועהים, חטיפי תנועה כושר, or התערבות חטיף תנועה.",
+    "When bare נשנוש, נשנושים, or נשנושי names the Snacksmate activity unit, use חטיף תנועה or חטיפי תנועה. Leave a food use of נשנוש unchanged. A separate tai chi arm is מקטעי טאי צ'י קצרים.",
     "Keep the difference between an observational association and an intervention contrast.",
     "Do not introduce information that is absent from the English source.",
     "Do not translate journal names, paper titles, author names, DOIs, or URLs.",

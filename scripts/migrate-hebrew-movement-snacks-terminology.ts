@@ -8,7 +8,9 @@
  *   npx tsx scripts/migrate-hebrew-movement-snacks-terminology.ts --write
  *
  * --write patches allowlisted reader-facing fields on existing Hebrew
- * documents. Published documents stay published. Drafts stay drafts.
+ * documents. It applies the exact נשנוש כושר migration and the reviewed
+ * contextual phrases. It does not replace every נשנוש.
+ * Published documents stay published. Drafts stay drafts.
  * It does not create documents and it does not publish.
  */
 

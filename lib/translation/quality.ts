@@ -3,6 +3,7 @@ import {
   missingGlossaryTerms,
   PRESERVED_ACRONYMS,
 } from "./glossary";
+import { bareProductUnitSnackWarnings } from "./terminology";
 import { collectUrls, plainText, translatableSpans } from "./segments";
 import type { EnglishDocument, HebrewDraft } from "./types";
 
@@ -433,6 +434,7 @@ export function translationQualityWarnings(input: {
 
   return unique([
     ...suspiciousLiteralWarnings(hebrew),
+    ...bareProductUnitSnackWarnings(hebrew),
     ...glossaryWarnings(sourceText, hebrew),
     ...acronymWarnings(sourceText, hebrew),
     ...associationWarnings({
