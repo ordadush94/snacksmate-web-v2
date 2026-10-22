@@ -25,14 +25,18 @@ export function storedLang(): Locale | null {
   return null;
 }
 
+export function isHebrewLanguageTag(tag: string): boolean {
+  const normalized = tag.toLowerCase();
+  return normalized === "he" || normalized.startsWith("he-");
+}
+
 export function langFromBrowser(): Locale {
   const tags =
     navigator.languages && navigator.languages.length
       ? navigator.languages
       : [navigator.language];
   for (const item of tags) {
-    const tag = String(item || "").toLowerCase();
-    if (tag === "he" || tag.startsWith("he-")) return "he";
+    if (isHebrewLanguageTag(String(item || ""))) return "he";
   }
   return "en";
 }
@@ -41,35 +45,32 @@ export function detectPreferredLang(): Locale {
   return storedLang() ?? langFromBrowser();
 }
 
-// Exact legacy redirect from /legacy-site/index (2).html so cookie,
-// localStorage, browser language, query, and hash behavior stay the same.
-export const LANGUAGE_REDIRECT_SCRIPT = `(function () {
-  var COOKIE = "snacksmate_lang";
-  var STORAGE_KEY = "snacksmate_landing_lang";
+export function localeFromCookie(value: string | null | undefined): Locale | null {
+  if (value && isLocale(value)) return value;
+  return null;
+}
 
-  function stored() {
-    var match = document.cookie.match(
-      new RegExp("(?:^|;\\\\s*)" + COOKIE + "=(he|en)(?:;|$)")
-    );
-    if (match) return match[1];
-    try {
-      var saved = localStorage.getItem(STORAGE_KEY);
-      if (saved === "he" || saved === "en") return saved;
-    } catch (e) {}
-    return null;
+// Accept-Language is the request equivalent of navigator.languages.
+// The legacy gate returned Hebrew when any tag was `he` or `he-*`,
+// including when English was listed first.
+export function localeFromAcceptLanguage(header: string | null | undefined): Locale {
+  if (!header) return "en";
+  const tags = header.split(",");
+  for (const part of tags) {
+    const tag = part.split(";")[0]?.trim() ?? "";
+    if (tag && isHebrewLanguageTag(tag)) return "he";
   }
+  return "en";
+}
 
-  function fromBrowser() {
-    var tags = (navigator.languages && navigator.languages.length) ?
-      navigator.languages : [navigator.language];
-    for (var i = 0; i < tags.length; i++) {
-      var tag = String(tags[i] || "").toLowerCase();
-      if (tag === "he" || tag.indexOf("he-") === 0) return "he";
-    }
-    return "en";
-  }
+export function preferredLocale(input: {
+  cookie: string | null | undefined;
+  acceptLanguage: string | null | undefined;
+}): Locale {
+  return localeFromCookie(input.cookie) ?? localeFromAcceptLanguage(input.acceptLanguage);
+}
 
-  // Trailing slash: Hosting 301s /en to /en/, so land there directly.
-  var lang = stored() || fromBrowser();
-  location.replace("/" + lang + "/" + location.search + location.hash);
-})();`;
+export function localeHomePath(locale: Locale, search = ""): string {
+  const query = search && search !== "?" ? (search.startsWith("?") ? search : `?${search}`) : "";
+  return `/${locale}/${query}`;
+}
