@@ -24,6 +24,12 @@ import {
   loadResearchDraftsByPmid,
   patchResearchDraft,
 } from "../lib/research-enrichment/sanity";
+import { attachResearchCoverImages } from "../lib/research-automation/images";
+import {
+  loadResearchImageDocumentsByIds,
+  patchResearchImage,
+  uploadResearchImage,
+} from "../lib/research-images/sanity";
 import { matchingHebrewLink } from "../lib/translation/document";
 import { requestHebrewFieldRepair, requestHebrewLocalization } from "../lib/translation/openai";
 import { runHebrewTranslation } from "../lib/translation/run";
@@ -165,6 +171,20 @@ async function main() {
           }),
         writeDraft: (id, fields) => patchResearchDraft(sanity, id, fields),
       }),
+    attachImages: async (studies) => {
+      const documents = await loadResearchImageDocumentsByIds(
+        sanity,
+        studies.map((study) => study.draftId),
+      );
+      return attachResearchCoverImages({
+        documents,
+        apiKey: openAiKey,
+        model: process.env.RESEARCH_IMAGE_MODEL,
+        qaModel: model,
+        uploadImage: (bytes, filename) => uploadResearchImage(sanity, bytes, filename),
+        patchDocument: (id, fields) => patchResearchImage(sanity, id, fields),
+      });
+    },
     loadTranslationSource: (draftId) => loadEnglishResearchDraft(sanity, draftId),
     translate: async (sources) => {
       const existing = await loadHebrewLinks(sanity, "research");
@@ -210,6 +230,7 @@ async function main() {
     report.maxCreates = args.maxCreates;
   }
   console.log(formatResearchAutomationReport(report));
+  // An image failure stays in the report. It does not fail the PubMed batch.
   if (automation.enrichmentFailed > 0 || automation.translationFailed > 0) {
     process.exitCode = 1;
   }

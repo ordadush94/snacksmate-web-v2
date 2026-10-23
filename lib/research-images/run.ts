@@ -41,8 +41,9 @@ import { formatImageCostBanner } from "./report";
  * English alt → Hebrew localization → the same Sanity asset → Hebrew alt →
  * needs_review → manual publish.
  *
- * This runner does not publish, does not create Research documents, and is not
- * wired to the Monday/Thursday schedule.
+ * This runner does not publish and does not create Research documents.
+ * The Monday/Thursday automation calls it with only the drafts that run just
+ * created. The manual workflow still uses it to scan the whole library.
  */
 export async function runResearchImageBackfill(input: {
   dryRun: boolean;
