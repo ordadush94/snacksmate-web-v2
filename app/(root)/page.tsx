@@ -1,26 +1,26 @@
-import Link from "next/link";
+import { cookies, headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { localeHomePath, preferredLocale } from "@/lib/language";
+import { LANG_COOKIE } from "@/lib/site";
 
-export default function LanguageGatePage() {
-  return (
-    <>
-      <style>{`
-        body {
-          margin: 0;
-          min-height: 100vh;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 20px;
-          font: 500 17px/1.4 system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
-          background: #fffaf2;
-          color: #23201c;
-        }
-        a { color: #23201c; }
-      `}</style>
-      <Link href="/en">English</Link>
-      <Link href="/he" lang="he">
-        עברית
-      </Link>
-    </>
-  );
+export const dynamic = "force-dynamic";
+
+export default async function LanguageGatePage({
+  searchParams,
+}: PageProps<"/">) {
+  const cookieStore = await cookies();
+  const headerStore = await headers();
+  const locale = preferredLocale({
+    cookie: cookieStore.get(LANG_COOKIE)?.value,
+    acceptLanguage: headerStore.get("accept-language"),
+  });
+  const params = await searchParams;
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (typeof value === "string") query.append(key, value);
+    else if (Array.isArray(value)) {
+      for (const item of value) query.append(key, item);
+    }
+  }
+  redirect(localeHomePath(locale, query.toString()));
 }
