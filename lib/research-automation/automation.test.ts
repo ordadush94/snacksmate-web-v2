@@ -309,9 +309,20 @@ test("a manual full-automation report names the mode and never publishes", () =>
     eligible: 2,
     existing: 3,
     englishDraftsCreated: 1,
+    enrichmentAttempted: 1,
     enrichedSuccessfully: 1,
     enrichmentFailed: 0,
+    imageEligible: 1,
+    imageGenerationAttempted: 1,
+    imageGenerated: 1,
+    imageGenerationFailed: 0,
+    sanityImageUploadsAttempted: 1,
+    sanityImageUploadsCompleted: 1,
+    englishImageAttached: 1,
+    englishAltCreated: 1,
     hebrewDraftsCreated: 1,
+    hebrewImageAssetReused: 1,
+    hebrewAltCreated: 1,
     translationFailed: 0,
     published: 0,
     withheldByLimit: 1,
@@ -327,6 +338,13 @@ test("a manual full-automation report names the mode and never publishes", () =>
         translationStatus: "needs_review",
         translationReviewWarnings: ["Glossary term is missing."],
         note: "The English draft was kept.",
+        imageStatus: "generated",
+        sanityAssetAttached: true,
+        assetRef: "image-abc123-2048x1152-png",
+        englishAltCreated: true,
+        hebrewImageReused: true,
+        hebrewAltCreated: true,
+        imageFailure: "",
       },
       {
         pmid: "456",
@@ -335,6 +353,13 @@ test("a manual full-automation report names the mode and never publishes", () =>
         aiEnrichmentStatus: "not_run",
         translationReviewWarnings: [],
         note: "Past the scheduled create limit. No draft was created.",
+        imageStatus: "not_run",
+        sanityAssetAttached: false,
+        assetRef: null,
+        englishAltCreated: false,
+        hebrewImageReused: false,
+        hebrewAltCreated: false,
+        imageFailure: "",
       },
     ],
   });
@@ -348,10 +373,23 @@ test("a manual full-automation report names the mode and never publishes", () =>
         "Max creates: 1",
         "Eligible: 2",
         "Existing: 3",
+        "Research created: 1",
         "English drafts created: 1",
+        "Enrichment attempted: 1",
         "Enriched successfully: 1",
+        "Enrichment completed: 1",
         "Enrichment failed: 0",
+        "Image eligible: 1",
+        "Image generation attempted: 1",
+        "Image generated: 1",
+        "Image generation failed: 0",
+        "Sanity image uploads attempted: 1",
+        "Sanity image uploads completed: 1",
+        "English image attached: 1",
+        "English ALT created: 1",
         "Hebrew drafts created: 1",
+        "Image asset reused in Hebrew: 1",
+        "Hebrew ALT created: 1",
         "Translation failed: 0",
         "Deferred: 1",
         "Published: 0",
@@ -363,6 +401,11 @@ test("a manual full-automation report names the mode and never publishes", () =>
   assert.match(report, /Title: Exercise snacks trial/);
   assert.match(report, /English draft id: drafts\.research-pubmed-123/);
   assert.match(report, /AI enrichment status: needs_review/);
+  assert.match(report, /Image status: generated/);
+  assert.match(report, /Sanity asset attached: yes/);
+  assert.match(report, /Same image reused: yes/);
+  assert.match(report, /Hebrew ALT created: yes/);
+  assert.match(report, /Image failure: none/);
   assert.match(report, /Hebrew draft id: drafts\.research-he-research-pubmed-123/);
   assert.match(report, /Translation status: needs_review/);
   assert.match(report, /Glossary term is missing\./);
@@ -380,14 +423,27 @@ test("a manual full-automation report names the mode and never publishes", () =>
     eligible: 1,
     existing: 0,
     englishDraftsCreated: 1,
+    enrichmentAttempted: 1,
     enrichedSuccessfully: 1,
     enrichmentFailed: 0,
+    imageEligible: 0,
+    imageGenerationAttempted: 0,
+    imageGenerated: 0,
+    imageGenerationFailed: 0,
+    sanityImageUploadsAttempted: 0,
+    sanityImageUploadsCompleted: 0,
+    englishImageAttached: 0,
+    englishAltCreated: 0,
     hebrewDraftsCreated: 0,
+    hebrewImageAssetReused: 0,
+    hebrewAltCreated: 0,
     translationFailed: 0,
     published: 0,
     withheldByLimit: 0,
     studies: [],
   });
+  assert.match(scheduled, /Image generation attempted: 0/);
+  assert.match(scheduled, /Published: 0/);
   assert.equal(scheduled.includes("Mode: manual full automation"), false);
   assert.match(scheduled, /Discovered: 1/);
   assert.equal(scheduled.includes("\nDeferred:"), false);
@@ -412,15 +468,30 @@ test("editorial locks use the schema statuses and the pipeline cannot publish", 
   assert.match(workflow, /cron: "0 8 \* \* 1,4"/);
   assert.match(workflow, /research:automate -- --max-creates=10/);
   assert.match(workflow, /research:discover -- --dry-run/);
+  assert.match(workflow, /RESEARCH_IMAGE_MODEL: \$\{\{ vars\.RESEARCH_IMAGE_MODEL \}\}/);
   assert.equal(workflow.includes(".publish("), false);
   assert.equal(workflow.includes("createOrReplace"), false);
+  assert.equal(workflow.includes("research:image-backfill"), false);
   assert.equal(automation.includes(".publish("), false);
   assert.equal(automation.includes("createOrReplace"), false);
   assert.equal(script.includes(".publish("), false);
   assert.equal(script.includes("createOrReplace"), false);
+  assert.equal(script.includes("research:image-backfill"), false);
+  assert.equal(script.includes("imageGenerationFailed > 0"), false);
   assert.match(script, /runResearchEnrichment/);
+  assert.match(script, /attachResearchCoverImages/);
+  assert.match(script, /loadResearchImageDocumentsByIds/);
   assert.match(script, /requestHebrewLocalization/);
   assert.match(script, /loadEnglishResearchDraft/);
+  const enrichCall = automation.indexOf("enrichment = await input.enrich");
+  const imageCall = automation.indexOf("await attachImagesForReadyStudies");
+  const reloadCall = automation.indexOf("await input.loadTranslationSource");
+  const translateCall = automation.indexOf("translation = await input.translate");
+  assert.ok(enrichCall >= 0 && imageCall > enrichCall && reloadCall > imageCall && translateCall > reloadCall);
+  const scriptEnrich = script.indexOf("runResearchEnrichment");
+  const scriptImage = script.indexOf("attachResearchCoverImages");
+  const scriptHebrew = script.indexOf("requestHebrewLocalization");
+  assert.ok(scriptEnrich >= 0 && scriptImage > scriptEnrich && scriptHebrew > scriptImage);
   assert.equal(hebrew.includes("research:automate"), false);
   assert.equal(hebrew.includes("schedule:"), false);
 });

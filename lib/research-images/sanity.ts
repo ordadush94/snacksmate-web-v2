@@ -3,7 +3,7 @@ import { assertAssetRef, assertImageBytes } from "./generate";
 import { parseImageAutomation } from "./provenance";
 import type { ImagePatchPlan, ResearchImageDocument } from "./types";
 
-export const RESEARCH_IMAGE_DOCUMENTS_QUERY = `*[_type == "research"]{
+const RESEARCH_IMAGE_DOCUMENT_PROJECTION = `{
   _id,
   language,
   title,
@@ -45,6 +45,11 @@ export const RESEARCH_IMAGE_DOCUMENTS_QUERY = `*[_type == "research"]{
   }
 }`;
 
+export const RESEARCH_IMAGE_DOCUMENTS_QUERY = `*[_type == "research"]${RESEARCH_IMAGE_DOCUMENT_PROJECTION}`;
+
+/** Scheduled automation loads only the drafts it just created. */
+export const RESEARCH_IMAGE_DOCUMENTS_BY_ID_QUERY = `*[_type == "research" && _id in $ids]${RESEARCH_IMAGE_DOCUMENT_PROJECTION}`;
+
 export type ResearchImageReadClient = {
   fetch: (query: string) => Promise<unknown>;
 };
@@ -71,6 +76,22 @@ export async function loadResearchImageDocuments(
   client: ResearchImageReadClient,
 ): Promise<ResearchImageDocument[]> {
   const rows = await client.fetch(RESEARCH_IMAGE_DOCUMENTS_QUERY);
+  return parseResearchImageRows(rows);
+}
+
+export async function loadResearchImageDocumentsByIds(
+  client: {
+    fetch: (query: string, params: { ids: string[] }) => Promise<unknown>;
+  },
+  ids: readonly string[],
+): Promise<ResearchImageDocument[]> {
+  const unique = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+  if (unique.length === 0) return [];
+  const rows = await client.fetch(RESEARCH_IMAGE_DOCUMENTS_BY_ID_QUERY, { ids: unique });
+  return parseResearchImageRows(rows);
+}
+
+function parseResearchImageRows(rows: unknown): ResearchImageDocument[] {
   if (!Array.isArray(rows)) return [];
   return rows.flatMap((row) => {
     const document = parseResearchImageDocument(row);

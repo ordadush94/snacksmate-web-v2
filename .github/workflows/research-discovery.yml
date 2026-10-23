@@ -1,14 +1,16 @@
 name: Research Discovery
 
 # SAFETY: the Monday/Thursday schedule creates at most 10 unpublished English drafts,
-# then runs the existing enrichment and Hebrew translation on those new drafts only.
-# It never publishes. Review candidates and rejections are log-only.
+# then enriches them, generates one Research image for each new draft, and creates
+# Hebrew drafts that reuse that same Sanity image. It never publishes.
+# Review candidates and rejections are log-only.
 # workflow_dispatch dry-run remains the default and writes nothing.
 # A manual write (dry-run unchecked) still creates English drafts only, with no cap,
 # and does not enrich or translate.
 # Manual full automation is separate. It runs only when run_full_automation is true
 # and confirm_automation is exactly RUN AUTOMATION. It calls the same research:automate
-# runner as the schedule, creates drafts only, and never publishes.
+# runner as the schedule, creates drafts only, generates images only for those new
+# drafts, and never publishes.
 # The discovery dry_run input is not applied to that mode.
 # A named-study import runs only when confirm_automation is exactly IMPORT NAMED STUDIES.
 # That mode creates unpublished English drafts for a fixed PubMed list, then enriches
@@ -26,7 +28,7 @@ on:
         required: false
         default: "14"
       run_full_automation:
-        description: "Run the full Research automation pipeline: Discovery → English draft → AI enrichment + SEO → Hebrew draft. Leave unchecked to keep the existing Research Discovery behavior."
+        description: "Run the full Research automation pipeline: Discovery → English draft → AI enrichment + SEO → Research image → Hebrew draft. Leave unchecked to keep the existing Research Discovery behavior."
         type: boolean
         required: false
         default: false
@@ -41,7 +43,7 @@ on:
         required: false
         default: ""
   schedule:
-    # Monday and Thursday 08:00 UTC. Creates at most 10 unpublished drafts, then enriches and translates them.
+    # Monday and Thursday 08:00 UTC. Creates at most 10 unpublished drafts, then enriches, illustrates, and translates them.
     - cron: "0 8 * * 1,4"
 
 permissions:
@@ -72,6 +74,7 @@ jobs:
           NCBI_API_KEY: ${{ secrets.NCBI_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           RESEARCH_AI_MODEL: ${{ vars.RESEARCH_AI_MODEL }}
+          RESEARCH_IMAGE_MODEL: ${{ vars.RESEARCH_IMAGE_MODEL }}
           NEXT_PUBLIC_SANITY_PROJECT_ID: 8wc8eouj
           NEXT_PUBLIC_SANITY_DATASET: production
           NEXT_PUBLIC_SANITY_API_VERSION: "2026-09-22"
@@ -91,7 +94,7 @@ jobs:
             exit $?
           fi
           if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
-            echo "Mode: scheduled draft pipeline. At most 10 new English drafts, then enrichment and Hebrew drafts. Nothing is published."
+            echo "Mode: scheduled draft pipeline. At most 10 new English drafts, then enrichment, one Research image each, and Hebrew drafts. Nothing is published."
             npm run research:automate -- --max-creates=10
           elif [ "$RUN_FULL_AUTOMATION" = "true" ]; then
             # Reject before npm so the automation runner never starts and nothing is written.
@@ -110,7 +113,7 @@ jobs:
             fi
             echo "Mode: manual full automation"
             echo "Max creates: $MAX_CREATES"
-            echo "Discovery dry-run is not used. This mode creates unpublished drafts through the existing automation runner and does not publish."
+            echo "Discovery dry-run is not used. This mode creates unpublished drafts, illustrates those new drafts, and does not publish."
             RESEARCH_AUTOMATION_MODE=manual npm run research:automate -- --max-creates="$MAX_CREATES"
           elif [ "$WRITE_DRAFTS" = "true" ]; then
             echo "Mode: create Sanity drafts (manual opt-in). Enrichment and Hebrew translation are not run."

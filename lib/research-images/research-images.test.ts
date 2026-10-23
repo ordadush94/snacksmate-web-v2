@@ -693,7 +693,7 @@ test("the image request is one landscape cover and the size follows the model", 
   );
 });
 
-test("the manual workflow is the only trigger and the schedule does not generate images", () => {
+test("the manual image backfill stays manual while scheduled automation uses the shared helpers", () => {
   assert.match(workflow, /name: Research Image Backfill/);
   assert.match(workflow, /workflow_dispatch:/);
   assert.equal(workflow.includes("cron:"), false);
@@ -711,9 +711,11 @@ test("the manual workflow is the only trigger and the schedule does not generate
   assert.equal(workflow.includes(".publish("), false);
   assert.equal(/echo[^\n]*(SANITY_WRITE_TOKEN|OPENAI_API_KEY)/.test(workflow), false);
   assert.match(discovery, /cron: "0 8 \* \* 1,4"/);
+  assert.match(discovery, /RESEARCH_IMAGE_MODEL: \$\{\{ vars\.RESEARCH_IMAGE_MODEL \}\}/);
   assert.equal(discovery.includes("research:image-backfill"), false);
-  assert.equal(discovery.includes("research-images"), false);
-  assert.equal(automation.includes("research-images"), false);
+  assert.match(automation, /attachResearchCoverImages/);
+  assert.match(automation, /loadResearchImageDocumentsByIds/);
+  assert.equal(automation.includes("loadResearchImageDocuments("), false);
   assert.equal(automation.includes("research:image-backfill"), false);
 
   const files = [

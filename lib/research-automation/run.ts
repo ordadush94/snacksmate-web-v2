@@ -4,6 +4,28 @@ import type { DiscoveryDraftRef, DiscoverySummary } from "../research-discovery/
 import type { TranslationRunSummary } from "../translation/run";
 import type { EnglishDocument } from "../translation/types";
 
+export type ResearchImageStepStatus =
+  | "not_run"
+  | "not_eligible"
+  | "skipped_existing"
+  | "generated"
+  | "failed";
+
+export type ResearchImageAttachment = {
+  pmid: string;
+  draftId: string;
+  status: ResearchImageStepStatus;
+  assetRef: string | null;
+  error: string;
+  generationAttempted: boolean;
+  generated: boolean;
+  generationFailed: boolean;
+  uploadsAttempted: number;
+  uploadsCompleted: number;
+  englishAttached: boolean;
+  englishAltCreated: boolean;
+};
+
 export type AutomationStudyReport = {
   pmid: string;
   title: string;
@@ -13,6 +35,13 @@ export type AutomationStudyReport = {
   translationStatus?: string;
   translationReviewWarnings: string[];
   note: string;
+  imageStatus: ResearchImageStepStatus;
+  sanityAssetAttached: boolean;
+  assetRef: string | null;
+  englishAltCreated: boolean;
+  hebrewImageReused: boolean;
+  hebrewAltCreated: boolean;
+  imageFailure: string;
 };
 
 export type ResearchAutomationReport = {
@@ -23,9 +52,20 @@ export type ResearchAutomationReport = {
   eligible: number;
   existing: number;
   englishDraftsCreated: number;
+  enrichmentAttempted: number;
   enrichedSuccessfully: number;
   enrichmentFailed: number;
+  imageEligible: number;
+  imageGenerationAttempted: number;
+  imageGenerated: number;
+  imageGenerationFailed: number;
+  sanityImageUploadsAttempted: number;
+  sanityImageUploadsCompleted: number;
+  englishImageAttached: number;
+  englishAltCreated: number;
   hebrewDraftsCreated: number;
+  hebrewImageAssetReused: number;
+  hebrewAltCreated: number;
   translationFailed: number;
   published: 0;
   withheldByLimit: number;
@@ -42,6 +82,7 @@ export type ResearchAutomationReport = {
 export type TranslationSource = {
   document: EnglishDocument;
   aiEnrichmentStatus: string;
+  assetRef: string | null;
 };
 
 /**
@@ -85,23 +126,17 @@ export function canTranslateEnrichedResearch(draft: {
 }
 
 export function projectDiscoveryReport(summary: DiscoverySummary): ResearchAutomationReport {
-  const studies = summary.wouldCreate.map((draft) => ({
-    pmid: draft.pmid,
-    title: draft.title,
-    englishDraftId: draft.draftId,
-    aiEnrichmentStatus: "not_run",
-    translationReviewWarnings: [],
-    note: "Dry-run. This study would be created, enriched, and then considered for Hebrew translation. Nothing was written.",
-  }));
+  const studies = summary.wouldCreate.map((draft) =>
+    studyShell(draft, {
+      note: "Dry-run. This study would be created, enriched, illustrated, and then considered for Hebrew translation. Nothing was written.",
+    }),
+  );
   for (const draft of summary.withheldByLimit) {
-    studies.push({
-      pmid: draft.pmid,
-      title: draft.title,
-      englishDraftId: draft.draftId,
-      aiEnrichmentStatus: "not_run",
-      translationReviewWarnings: [],
-      note: "Dry-run. Past the scheduled create limit. Nothing was written.",
-    });
+    studies.push(
+      studyShell(draft, {
+        note: "Dry-run. Past the scheduled create limit. Nothing was written.",
+      }),
+    );
   }
 
   return {
@@ -111,6 +146,7 @@ export function projectDiscoveryReport(summary: DiscoverySummary): ResearchAutom
     reviewCandidates: summary.reviewCandidates,
     eligible: summary.wouldCreate.length + summary.withheldByLimit.length,
     existing: summary.duplicatesSkipped,
+    ...emptyImageCounters(),
     englishDraftsCreated: 0,
     enrichedSuccessfully: 0,
     enrichmentFailed: 0,
@@ -123,7 +159,8 @@ export function projectDiscoveryReport(summary: DiscoverySummary): ResearchAutom
 }
 
 /**
- * Enrich and translate only the English drafts this run just created.
+ * Enrich, illustrate, and translate only the English drafts this run just created.
+ * Image generation runs after enrichment and before Hebrew localization.
  * A failed later stage does not delete the English draft and does not stop the batch.
  */
 export async function automateCreatedResearchDrafts(input: {
@@ -131,27 +168,40 @@ export async function automateCreatedResearchDrafts(input: {
   loadDrafts: (pmids: string[]) => Promise<ResearchDraftSnapshot[]>;
   enrich: (drafts: ResearchDraftSnapshot[]) => Promise<EnrichmentSummary>;
   reloadDrafts: (pmids: string[]) => Promise<ResearchDraftSnapshot[]>;
+  /**
+   * Creates one Research cover for each enriched draft that does not already
+   * have mainImage. Implementations must not publish and must not scan the
+   * historical library.
+   */
+  attachImages?: (
+    studies: readonly { pmid: string; draftId: string }[],
+  ) => Promise<readonly ResearchImageAttachment[]>;
   loadTranslationSource: (draftId: string) => Promise<EnglishDocument>;
   translate: (sources: readonly TranslationSource[]) => Promise<TranslationRunSummary>;
 }): Promise<
   Pick<
     ResearchAutomationReport,
+    | "enrichmentAttempted"
     | "enrichedSuccessfully"
     | "enrichmentFailed"
+    | "imageEligible"
+    | "imageGenerationAttempted"
+    | "imageGenerated"
+    | "imageGenerationFailed"
+    | "sanityImageUploadsAttempted"
+    | "sanityImageUploadsCompleted"
+    | "englishImageAttached"
+    | "englishAltCreated"
     | "hebrewDraftsCreated"
+    | "hebrewImageAssetReused"
+    | "hebrewAltCreated"
     | "translationFailed"
     | "studies"
   >
 > {
-  const studies: AutomationStudyReport[] = input.created.map((draft) => ({
-    pmid: draft.pmid,
-    title: draft.title,
-    englishDraftId: draft.draftId,
-    aiEnrichmentStatus: "not_run",
-    translationReviewWarnings: [],
-    note: "",
-  }));
+  const studies: AutomationStudyReport[] = input.created.map((draft) => studyShell(draft));
   const result = {
+    ...emptyImageCounters(),
     enrichedSuccessfully: 0,
     enrichmentFailed: 0,
     hebrewDraftsCreated: 0,
@@ -159,6 +209,7 @@ export async function automateCreatedResearchDrafts(input: {
     studies,
   };
   if (input.created.length === 0) return result;
+  result.enrichmentAttempted = input.created.length;
 
   const pmids = input.created.map((draft) => draft.pmid);
   let drafts: ResearchDraftSnapshot[];
@@ -174,6 +225,7 @@ export async function automateCreatedResearchDrafts(input: {
   for (const draft of missing) {
     mark(result, draft.pmid, {
       aiEnrichmentStatus: "failed",
+      imageStatus: "not_eligible",
       note: "The new English draft could not be read for enrichment. It was not deleted.",
     });
     result.enrichmentFailed += 1;
@@ -192,6 +244,7 @@ export async function automateCreatedResearchDrafts(input: {
     for (const draft of present) {
       mark(result, draft.pmid, {
         aiEnrichmentStatus: "failed",
+        imageStatus: "not_eligible",
         note: `Enrichment failed. The English draft was kept. ${messageOf(error)}`,
       });
       result.enrichmentFailed += 1;
@@ -206,6 +259,7 @@ export async function automateCreatedResearchDrafts(input: {
     for (const draft of present) {
       mark(result, draft.pmid, {
         aiEnrichmentStatus: "failed",
+        imageStatus: "not_eligible",
         note: `Enrichment result could not be read. The English draft was kept. ${messageOf(error)}`,
       });
       result.enrichmentFailed += 1;
@@ -214,10 +268,13 @@ export async function automateCreatedResearchDrafts(input: {
   }
 
   const reloadedByPmid = new Map(reloaded.map((draft) => [draft.pmid, draft]));
-  const sources: TranslationSource[] = [];
+  const ready: { pmid: string; draftId: string; status: string; reason: string }[] = [];
 
   for (const created of input.created) {
-    if (missing.some((draft) => draft.pmid === created.pmid)) continue;
+    if (missing.some((draft) => draft.pmid === created.pmid)) {
+      mark(result, created.pmid, { imageStatus: "not_eligible" });
+      continue;
+    }
     const outcome = enrichment.pmidResults.find((item) => item.pmid === created.pmid);
     const draft = reloadedByPmid.get(created.pmid);
     const status =
@@ -227,6 +284,7 @@ export async function automateCreatedResearchDrafts(input: {
       result.enrichmentFailed += 1;
       mark(result, created.pmid, {
         aiEnrichmentStatus: status || "failed",
+        imageStatus: "not_eligible",
         note: "Enrichment failed. The English draft was kept and was not translated.",
       });
       continue;
@@ -241,23 +299,43 @@ export async function automateCreatedResearchDrafts(input: {
       else result.enrichmentFailed += 1;
       mark(result, created.pmid, {
         aiEnrichmentStatus: status || "not_finished",
+        imageStatus: "not_eligible",
         note: decision.reason,
       });
       continue;
     }
 
     result.enrichedSuccessfully += 1;
+    result.imageEligible += 1;
+    ready.push({
+      pmid: created.pmid,
+      draftId: created.draftId,
+      status,
+      reason: decision.reason,
+    });
+    mark(result, created.pmid, {
+      aiEnrichmentStatus: status,
+      note: decision.reason,
+    });
+  }
+
+  if (ready.length > 0) {
+    await attachImagesForReadyStudies(result, ready, input.attachImages);
+  }
+
+  const sources: TranslationSource[] = [];
+  for (const created of ready) {
     try {
       const document = await input.loadTranslationSource(created.draftId);
-      sources.push({ document, aiEnrichmentStatus: status });
+      const assetRef = imageAssetRef(document);
+      sources.push({ document, aiEnrichmentStatus: created.status, assetRef });
       mark(result, created.pmid, {
-        aiEnrichmentStatus: status,
-        note: decision.reason,
+        assetRef,
+        sanityAssetAttached: Boolean(assetRef),
       });
     } catch (error) {
       result.translationFailed += 1;
       mark(result, created.pmid, {
-        aiEnrichmentStatus: status,
         note: `The English draft was kept. Hebrew translation did not start. ${messageOf(error)}`,
       });
     }
@@ -286,6 +364,14 @@ export async function automateCreatedResearchDrafts(input: {
       study.hebrewDraftId = item.draftId;
       study.translationStatus = item.translationStatus;
       study.translationReviewWarnings = warningLines(item.reviewNote);
+      const source = sources.find((entry) => entry.document._id === item.sourceId);
+      const sameAsset = Boolean(
+        source?.assetRef && item.imageAssetRef && source.assetRef === item.imageAssetRef,
+      );
+      study.hebrewImageReused = sameAsset;
+      study.hebrewAltCreated = Boolean(sameAsset && item.imageAlt?.trim());
+      if (sameAsset) result.hebrewImageAssetReused += 1;
+      if (study.hebrewAltCreated) result.hebrewAltCreated += 1;
       continue;
     }
     if (item.outcome === "failed") {
@@ -305,9 +391,20 @@ export function combineAutomationReport(
   discovery: DiscoverySummary,
   automation: Pick<
     ResearchAutomationReport,
+    | "enrichmentAttempted"
     | "enrichedSuccessfully"
     | "enrichmentFailed"
+    | "imageEligible"
+    | "imageGenerationAttempted"
+    | "imageGenerated"
+    | "imageGenerationFailed"
+    | "sanityImageUploadsAttempted"
+    | "sanityImageUploadsCompleted"
+    | "englishImageAttached"
+    | "englishAltCreated"
     | "hebrewDraftsCreated"
+    | "hebrewImageAssetReused"
+    | "hebrewAltCreated"
     | "translationFailed"
     | "studies"
   >,
@@ -320,22 +417,30 @@ export function combineAutomationReport(
     eligible: discovery.createdDrafts.length + discovery.withheldByLimit.length,
     existing: discovery.duplicatesSkipped,
     englishDraftsCreated: discovery.createdDrafts.length,
+    enrichmentAttempted: automation.enrichmentAttempted,
     enrichedSuccessfully: automation.enrichedSuccessfully,
     enrichmentFailed: automation.enrichmentFailed,
+    imageEligible: automation.imageEligible,
+    imageGenerationAttempted: automation.imageGenerationAttempted,
+    imageGenerated: automation.imageGenerated,
+    imageGenerationFailed: automation.imageGenerationFailed,
+    sanityImageUploadsAttempted: automation.sanityImageUploadsAttempted,
+    sanityImageUploadsCompleted: automation.sanityImageUploadsCompleted,
+    englishImageAttached: automation.englishImageAttached,
+    englishAltCreated: automation.englishAltCreated,
     hebrewDraftsCreated: automation.hebrewDraftsCreated,
+    hebrewImageAssetReused: automation.hebrewImageAssetReused,
+    hebrewAltCreated: automation.hebrewAltCreated,
     translationFailed: automation.translationFailed,
     published: 0,
     withheldByLimit: discovery.withheldByLimit.length,
     studies: [
       ...automation.studies,
-      ...discovery.withheldByLimit.map((draft) => ({
-        pmid: draft.pmid,
-        title: draft.title,
-        englishDraftId: draft.draftId,
-        aiEnrichmentStatus: "not_run",
-        translationReviewWarnings: [],
-        note: "Past the scheduled create limit. No draft was created.",
-      })),
+      ...discovery.withheldByLimit.map((draft) =>
+        studyShell(draft, {
+          note: "Past the scheduled create limit. No draft was created.",
+        }),
+      ),
     ],
   };
 }
@@ -349,11 +454,7 @@ export function formatResearchAutomationReport(report: ResearchAutomationReport)
       `Max creates: ${report.maxCreates ?? ""}`,
       `Eligible: ${report.eligible}`,
       `Existing: ${report.existing}`,
-      `English drafts created: ${report.englishDraftsCreated}`,
-      `Enriched successfully: ${report.enrichedSuccessfully}`,
-      `Enrichment failed: ${report.enrichmentFailed}`,
-      `Hebrew drafts created: ${report.hebrewDraftsCreated}`,
-      `Translation failed: ${report.translationFailed}`,
+      ...automationCounterLines(report),
       `Deferred: ${report.withheldByLimit}`,
       "Published: 0",
     );
@@ -364,11 +465,7 @@ export function formatResearchAutomationReport(report: ResearchAutomationReport)
       `Review candidates: ${report.reviewCandidates}`,
       `Eligible: ${report.eligible}`,
       `Existing: ${report.existing}`,
-      `English drafts created: ${report.englishDraftsCreated}`,
-      `Enriched successfully: ${report.enrichedSuccessfully}`,
-      `Enrichment failed: ${report.enrichmentFailed}`,
-      `Hebrew drafts created: ${report.hebrewDraftsCreated}`,
-      `Translation failed: ${report.translationFailed}`,
+      ...automationCounterLines(report),
       "Published: 0",
     );
 
@@ -377,7 +474,7 @@ export function formatResearchAutomationReport(report: ResearchAutomationReport)
         `Would create English drafts: ${report.studies.filter((study) => study.note.startsWith("Dry-run. This study")).length}`,
         `Would enrich: ${report.studies.filter((study) => study.note.startsWith("Dry-run. This study")).length}`,
         `Would create Hebrew drafts: ${report.studies.filter((study) => study.note.startsWith("Dry-run. This study")).length}`,
-        "Dry-run does not call the enrichment or translation models and does not write.",
+        "Dry-run does not call the enrichment, image, or translation models and does not write.",
       );
     }
     if (report.withheldByLimit > 0) {
@@ -392,8 +489,13 @@ export function formatResearchAutomationReport(report: ResearchAutomationReport)
       `Title: ${study.title}`,
       `English draft id: ${study.englishDraftId}`,
       `AI enrichment status: ${study.aiEnrichmentStatus}`,
+      `Image status: ${study.imageStatus}`,
+      `Sanity asset attached: ${study.sanityAssetAttached ? "yes" : "no"}`,
       `Hebrew draft id: ${study.hebrewDraftId ?? "(not created)"}`,
       `Translation status: ${study.translationStatus ?? "(not created)"}`,
+      `Same image reused: ${study.hebrewImageReused ? "yes" : "no"}`,
+      `Hebrew ALT created: ${study.hebrewAltCreated ? "yes" : "no"}`,
+      `Image failure: ${study.imageFailure || "none"}`,
       "Translation review warnings:",
       ...(study.translationReviewWarnings.length > 0
         ? study.translationReviewWarnings.map((warning) => `- ${warning}`)
@@ -411,9 +513,162 @@ function failEnrichment(
 ) {
   for (const study of result.studies) {
     study.aiEnrichmentStatus = "failed";
+    study.imageStatus = "not_eligible";
     study.note = `Enrichment failed. The English draft was kept. ${message}`;
     result.enrichmentFailed += 1;
   }
+}
+
+function automationCounterLines(report: ResearchAutomationReport): string[] {
+  return [
+    `Research created: ${report.englishDraftsCreated}`,
+    `English drafts created: ${report.englishDraftsCreated}`,
+    `Enrichment attempted: ${report.enrichmentAttempted}`,
+    `Enriched successfully: ${report.enrichedSuccessfully}`,
+    `Enrichment completed: ${report.enrichedSuccessfully}`,
+    `Enrichment failed: ${report.enrichmentFailed}`,
+    `Image eligible: ${report.imageEligible}`,
+    `Image generation attempted: ${report.imageGenerationAttempted}`,
+    `Image generated: ${report.imageGenerated}`,
+    `Image generation failed: ${report.imageGenerationFailed}`,
+    `Sanity image uploads attempted: ${report.sanityImageUploadsAttempted}`,
+    `Sanity image uploads completed: ${report.sanityImageUploadsCompleted}`,
+    `English image attached: ${report.englishImageAttached}`,
+    `English ALT created: ${report.englishAltCreated}`,
+    `Hebrew drafts created: ${report.hebrewDraftsCreated}`,
+    `Image asset reused in Hebrew: ${report.hebrewImageAssetReused}`,
+    `Hebrew ALT created: ${report.hebrewAltCreated}`,
+    `Translation failed: ${report.translationFailed}`,
+  ];
+}
+
+function emptyImageCounters() {
+  return {
+    enrichmentAttempted: 0,
+    imageEligible: 0,
+    imageGenerationAttempted: 0,
+    imageGenerated: 0,
+    imageGenerationFailed: 0,
+    sanityImageUploadsAttempted: 0,
+    sanityImageUploadsCompleted: 0,
+    englishImageAttached: 0,
+    englishAltCreated: 0,
+    hebrewImageAssetReused: 0,
+    hebrewAltCreated: 0,
+  };
+}
+
+function studyShell(
+  draft: { pmid: string; title: string; draftId: string },
+  extra: Partial<AutomationStudyReport> = {},
+): AutomationStudyReport {
+  return {
+    pmid: draft.pmid,
+    title: draft.title,
+    englishDraftId: draft.draftId,
+    aiEnrichmentStatus: "not_run",
+    translationReviewWarnings: [],
+    note: "",
+    imageStatus: "not_run",
+    sanityAssetAttached: false,
+    assetRef: null,
+    englishAltCreated: false,
+    hebrewImageReused: false,
+    hebrewAltCreated: false,
+    imageFailure: "",
+    ...extra,
+  };
+}
+
+async function attachImagesForReadyStudies(
+  result: {
+    imageGenerationAttempted: number;
+    imageGenerated: number;
+    imageGenerationFailed: number;
+    sanityImageUploadsAttempted: number;
+    sanityImageUploadsCompleted: number;
+    englishImageAttached: number;
+    englishAltCreated: number;
+    studies: AutomationStudyReport[];
+  },
+  ready: readonly { pmid: string; draftId: string }[],
+  attachImages:
+    | ((
+        studies: readonly { pmid: string; draftId: string }[],
+      ) => Promise<readonly ResearchImageAttachment[]>)
+    | undefined,
+) {
+  if (!attachImages) {
+    for (const study of ready) {
+      mark(result, study.pmid, {
+        imageStatus: "not_run",
+        imageFailure: "Image generation was not run.",
+      });
+    }
+    return;
+  }
+
+  let attachments: readonly ResearchImageAttachment[];
+  try {
+    attachments = await attachImages(ready.map(({ pmid, draftId }) => ({ pmid, draftId })));
+  } catch (error) {
+    const message = messageOf(error);
+    for (const study of ready) {
+      mark(result, study.pmid, { imageStatus: "failed", imageFailure: message });
+      result.imageGenerationAttempted += 1;
+      result.imageGenerationFailed += 1;
+    }
+    return;
+  }
+
+  const byPmid = new Map(attachments.map((item) => [item.pmid, item]));
+  for (const study of ready) {
+    const attachment = byPmid.get(study.pmid);
+    if (!attachment) {
+      mark(result, study.pmid, {
+        imageStatus: "failed",
+        imageFailure: "Image generation did not report this study.",
+      });
+      result.imageGenerationAttempted += 1;
+      result.imageGenerationFailed += 1;
+      continue;
+    }
+    applyImageAttachment(result, attachment);
+  }
+}
+
+function applyImageAttachment(
+  result: {
+    imageGenerationAttempted: number;
+    imageGenerated: number;
+    imageGenerationFailed: number;
+    sanityImageUploadsAttempted: number;
+    sanityImageUploadsCompleted: number;
+    englishImageAttached: number;
+    englishAltCreated: number;
+    studies: AutomationStudyReport[];
+  },
+  attachment: ResearchImageAttachment,
+) {
+  mark(result, attachment.pmid, {
+    imageStatus: attachment.status,
+    assetRef: attachment.assetRef,
+    imageFailure: attachment.error,
+    englishAltCreated: attachment.englishAltCreated,
+    sanityAssetAttached: Boolean(attachment.assetRef) && attachment.status !== "failed",
+  });
+  if (attachment.generationAttempted) result.imageGenerationAttempted += 1;
+  if (attachment.generated) result.imageGenerated += 1;
+  if (attachment.generationFailed) result.imageGenerationFailed += 1;
+  result.sanityImageUploadsAttempted += attachment.uploadsAttempted;
+  result.sanityImageUploadsCompleted += attachment.uploadsCompleted;
+  if (attachment.englishAttached) result.englishImageAttached += 1;
+  if (attachment.englishAltCreated) result.englishAltCreated += 1;
+}
+
+function imageAssetRef(document: EnglishDocument): string | null {
+  const ref = document.mainImage?.asset?._ref?.trim() || "";
+  return ref || null;
 }
 
 function mark(

@@ -10,6 +10,10 @@ export type TranslationItemResult = {
   translationStatus?: "needs_review";
   reviewNote?: string;
   message?: string;
+  /** Asset copied onto the Hebrew draft. Reporting only. */
+  imageAssetRef?: string | null;
+  /** Alt text stored on the Hebrew draft image. Reporting only. */
+  imageAlt?: string | null;
 };
 
 export type TranslationRunSummary = {
@@ -134,11 +138,15 @@ function itemFromDraft(
   outcome: "created" | "dry-run",
   draft: HebrewDraft,
 ): TranslationItemResult {
+  const ref = draft.mainImage?.asset?._ref?.trim() || null;
+  const alt = draft.mainImage?.alt?.trim() || null;
   return {
     sourceId,
     outcome,
     draftId: draft._id,
     translationStatus: draft.translationStatus,
     reviewNote: draft.translationReviewNote,
+    imageAssetRef: ref,
+    imageAlt: alt,
   };
 }
