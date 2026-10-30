@@ -166,6 +166,23 @@ test("unchecked full automation keeps the existing discovery paths", () => {
   assert.equal(write.calls.includes("research:automate"), false);
 });
 
+test("draft recovery is a separate confirmation and does not discover or publish", () => {
+  const result = runDispatch({
+    GITHUB_EVENT_NAME: "workflow_dispatch",
+    RUN_FULL_AUTOMATION: "true",
+    WRITE_DRAFTS: "true",
+    MAX_CREATES: "10",
+    CONFIRM_AUTOMATION: "RECOVER RESEARCH DRAFTS",
+  });
+  assert.equal(result.status, 0);
+  assert.equal(result.calls, "mode= args=run research:recover\n");
+  assert.equal(result.calls.includes("research:discover"), false);
+  assert.equal(result.calls.includes("research:automate"), false);
+  assert.equal(result.calls.includes("research:import-selected"), false);
+  assert.match(result.stdout, /Discovery is not run/);
+  assert.match(result.stdout, /Nothing is published/);
+});
+
 test("named study import is a separate confirmation and does not publish", () => {
   const result = runDispatch({
     GITHUB_EVENT_NAME: "workflow_dispatch",
