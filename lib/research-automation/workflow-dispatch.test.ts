@@ -166,21 +166,33 @@ test("unchecked full automation keeps the existing discovery paths", () => {
   assert.equal(write.calls.includes("research:automate"), false);
 });
 
-test("draft recovery is a separate confirmation and does not discover or publish", () => {
-  const result = runDispatch({
+test("draft recovery passes the workflow dry-run input through to the runner", () => {
+  const live = runDispatch({
     GITHUB_EVENT_NAME: "workflow_dispatch",
     RUN_FULL_AUTOMATION: "true",
     WRITE_DRAFTS: "true",
     MAX_CREATES: "10",
     CONFIRM_AUTOMATION: "RECOVER RESEARCH DRAFTS",
   });
-  assert.equal(result.status, 0);
-  assert.equal(result.calls, "mode= args=run research:recover\n");
-  assert.equal(result.calls.includes("research:discover"), false);
-  assert.equal(result.calls.includes("research:automate"), false);
-  assert.equal(result.calls.includes("research:import-selected"), false);
-  assert.match(result.stdout, /Discovery is not run/);
-  assert.match(result.stdout, /Nothing is published/);
+  assert.equal(live.status, 0);
+  assert.equal(live.calls, "mode= args=run research:recover -- --write\n");
+  assert.match(live.stdout, /Recovery dry_run: false/);
+  assert.equal(live.calls.includes("research:discover"), false);
+  assert.equal(live.calls.includes("research:automate"), false);
+
+  const dryRun = runDispatch({
+    GITHUB_EVENT_NAME: "workflow_dispatch",
+    RUN_FULL_AUTOMATION: "true",
+    WRITE_DRAFTS: "false",
+    MAX_CREATES: "10",
+    CONFIRM_AUTOMATION: "RECOVER RESEARCH DRAFTS",
+  });
+  assert.equal(dryRun.status, 0);
+  assert.equal(dryRun.calls, "mode= args=run research:recover -- --dry-run\n");
+  assert.match(dryRun.stdout, /Recovery dry_run: true/);
+  assert.match(dryRun.stdout, /No OpenAI calls and no Sanity writes/);
+  assert.equal(dryRun.calls.includes("research:discover"), false);
+  assert.equal(dryRun.calls.includes("--write"), false);
 });
 
 test("named study import is a separate confirmation and does not publish", () => {
