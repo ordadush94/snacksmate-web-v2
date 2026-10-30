@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   classifyResearchDocument,
   executeResearchRecovery,
+  formatRecoveryReport,
   parseRecoveryArgs,
   RECOVERY_PMIDS,
   recoveryExitCode,
@@ -295,11 +296,46 @@ test("image failure alone does not force exit code 1", async () => {
   assert.equal(recoveryExitCode(enrichmentFailure), 1);
 });
 
+test("the recovery report names both targets and keeps PMID 42948631 untouched", async () => {
+  const effects = countingEffects({ imageOk: false, imageError: "Image QA failed." });
+  const dryRun = await executeResearchRecovery({
+    dryRun: true,
+    studies: remainingStudies(),
+    effects: effects.effects,
+  });
+  const preview = formatRecoveryReport(dryRun);
+  assert.match(preview, /Recovery dry_run: true/);
+  assert.match(preview, /Recovery targets: 42925061, 42923131/);
+  assert.match(preview, /PMID 42948631 touched: no/);
+  assert.match(preview, /OpenAI calls: 0/);
+  assert.match(preview, /Image generation attempts: 0/);
+  assert.match(preview, /Image QA calls: 0/);
+  assert.match(preview, /Sanity writes: 0/);
+  assert.match(preview, /Assets uploaded: 0/);
+  assert.match(preview, /Hebrew drafts created: 0/);
+  assert.match(preview, /Published: 0/);
+  assert.match(preview, /PMID 42925061[\s\S]*document state: draft[\s\S]*enrichment result: skip[\s\S]*image result: skip_existing[\s\S]*image QA result: not_run[\s\S]*Hebrew result: would_create[\s\S]*Hebrew draft id: drafts\.research-he-research-pubmed-42925061/);
+  assert.match(preview, /PMID 42923131[\s\S]*image result: would_attempt_once[\s\S]*image QA result: not_run[\s\S]*Hebrew result: would_create[\s\S]*Hebrew draft id: drafts\.research-he-research-pubmed-42923131/);
+  assert.equal(preview.includes("42948631\n"), false);
+
+  const live = await executeResearchRecovery({
+    dryRun: false,
+    studies: remainingStudies(),
+    effects: countingEffects({ imageOk: false, imageError: "Image QA failed." }).effects,
+  });
+  const report = formatRecoveryReport(live);
+  assert.match(report, /Recovery dry_run: false/);
+  assert.match(report, /PMID 42923131[\s\S]*image result: failed[\s\S]*image QA result: failed[\s\S]*Hebrew result: created/);
+  assert.match(report, /PMID 42925061[\s\S]*image result: skip_existing[\s\S]*image QA result: not_run[\s\S]*Hebrew result: created/);
+  assert.match(report, /Published: 0/);
+});
+
 test("no publish path exists", () => {
   const files = [
     new URL("./recover.ts", import.meta.url),
     new URL("../../scripts/recover-research-drafts.ts", import.meta.url),
     new URL("../../.github/workflows/research-discovery.yml", import.meta.url),
+    new URL("../../.github/workflows/recover-research-drafts.yml", import.meta.url),
   ];
   for (const file of files) {
     const source = readFileSync(file, "utf8");
