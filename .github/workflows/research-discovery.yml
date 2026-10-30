@@ -15,6 +15,9 @@ name: Research Discovery
 # A named-study import runs only when confirm_automation is exactly IMPORT NAMED STUDIES.
 # That mode creates unpublished English drafts for a fixed PubMed list, then enriches
 # them and creates Hebrew drafts. It never publishes. dry_run does not apply to it.
+# Recovery of the three drafts left by the OpenAI 401 failure runs only when
+# confirm_automation is exactly RECOVER RESEARCH DRAFTS. That mode does not search
+# PubMed, does not create English drafts, and does not publish.
 on:
   workflow_dispatch:
     inputs:
@@ -38,7 +41,7 @@ on:
         required: false
         default: 1
       confirm_automation:
-        description: "Type RUN AUTOMATION for full automation, or IMPORT NAMED STUDIES to import the fixed PubMed list as unpublished English and Hebrew drafts. Leave empty for Research Discovery. This never publishes."
+        description: "Type RUN AUTOMATION for full automation, IMPORT NAMED STUDIES to import the fixed PubMed list, or RECOVER RESEARCH DRAFTS to resume PMIDs 42925061, 42923131, and 42948631. Leave empty for Research Discovery. This never publishes."
         type: string
         required: false
         default: ""
@@ -88,6 +91,11 @@ jobs:
         run: |
           echo "Only AUTO_DRAFT records can create Sanity drafts. REVIEW_CANDIDATE records are never written."
           echo "Published: 0"
+          if [ "$CONFIRM_AUTOMATION" = "RECOVER RESEARCH DRAFTS" ]; then
+            echo "Mode: recover three existing Research drafts. Discovery is not run. English drafts are not created. Nothing is published."
+            RECOVER_CONFIRM="RECOVER RESEARCH DRAFTS" npm run research:recover
+            exit $?
+          fi
           if [ "$CONFIRM_AUTOMATION" = "IMPORT NAMED STUDIES" ]; then
             echo "Mode: named study import. Creates unpublished English drafts, enriches them, and creates Hebrew drafts. Nothing is published."
             IMPORT_CONFIRM="CREATE DRAFTS" npm run research:import-selected -- --write
