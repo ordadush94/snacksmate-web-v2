@@ -166,33 +166,28 @@ test("unchecked full automation keeps the existing discovery paths", () => {
   assert.equal(write.calls.includes("research:automate"), false);
 });
 
-test("draft recovery passes the workflow dry-run input through to the runner", () => {
-  const live = runDispatch({
-    GITHUB_EVENT_NAME: "workflow_dispatch",
-    RUN_FULL_AUTOMATION: "true",
-    WRITE_DRAFTS: "true",
-    MAX_CREATES: "10",
-    CONFIRM_AUTOMATION: "RECOVER RESEARCH DRAFTS",
-  });
-  assert.equal(live.status, 0);
-  assert.equal(live.calls, "mode= args=run research:recover -- --write\n");
-  assert.match(live.stdout, /Recovery dry_run: false/);
-  assert.equal(live.calls.includes("research:discover"), false);
-  assert.equal(live.calls.includes("research:automate"), false);
-
-  const dryRun = runDispatch({
-    GITHUB_EVENT_NAME: "workflow_dispatch",
-    RUN_FULL_AUTOMATION: "true",
-    WRITE_DRAFTS: "false",
-    MAX_CREATES: "10",
-    CONFIRM_AUTOMATION: "RECOVER RESEARCH DRAFTS",
-  });
-  assert.equal(dryRun.status, 0);
-  assert.equal(dryRun.calls, "mode= args=run research:recover -- --dry-run\n");
-  assert.match(dryRun.stdout, /Recovery dry_run: true/);
-  assert.match(dryRun.stdout, /No OpenAI calls and no Sanity writes/);
-  assert.equal(dryRun.calls.includes("research:discover"), false);
-  assert.equal(dryRun.calls.includes("--write"), false);
+test("research discovery refuses the old recovery confirmation before any command", () => {
+  assert.equal(workflow.includes("research:recover"), false);
+  assert.equal(workflow.includes("42948631"), false);
+  for (const input of [
+    { RUN_FULL_AUTOMATION: "true", WRITE_DRAFTS: "true" },
+    { RUN_FULL_AUTOMATION: "false", WRITE_DRAFTS: "true" },
+    { RUN_FULL_AUTOMATION: "false", WRITE_DRAFTS: "false" },
+  ]) {
+    const result = runDispatch({
+      GITHUB_EVENT_NAME: "workflow_dispatch",
+      MAX_CREATES: "10",
+      CONFIRM_AUTOMATION: "RECOVER RESEARCH DRAFTS",
+      ...input,
+    });
+    assert.equal(result.status, 1);
+    assert.equal(result.calls, "");
+    assert.match(result.stdout, /separate workflow/);
+    assert.match(result.stdout, /before any Sanity write/);
+    assert.equal(result.calls.includes("research:discover"), false);
+    assert.equal(result.calls.includes("research:automate"), false);
+    assert.equal(result.calls.includes("research:recover"), false);
+  }
 });
 
 test("named study import is a separate confirmation and does not publish", () => {

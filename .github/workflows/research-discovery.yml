@@ -15,11 +15,7 @@ name: Research Discovery
 # A named-study import runs only when confirm_automation is exactly IMPORT NAMED STUDIES.
 # That mode creates unpublished English drafts for a fixed PubMed list, then enriches
 # them and creates Hebrew drafts. It never publishes. dry_run does not apply to it.
-# Recovery runs only when confirm_automation is exactly RECOVER RESEARCH DRAFTS.
-# It resumes PMIDs 42925061 and 42923131 only. PMID 42948631 is not included.
-# The workflow dry_run input applies: checked means read Sanity and print the
-# plan, with no OpenAI calls and no Sanity writes. Unchecked is the live run.
-# Recovery does not search PubMed, does not create English drafts, and does not publish.
+# Research draft recovery is not part of this workflow. Use Recover Research Drafts.
 on:
   workflow_dispatch:
     inputs:
@@ -43,7 +39,7 @@ on:
         required: false
         default: 1
       confirm_automation:
-        description: "Type RUN AUTOMATION for full automation, IMPORT NAMED STUDIES to import the fixed PubMed list, or RECOVER RESEARCH DRAFTS to resume PMIDs 42925061 and 42923131. Leave empty for Research Discovery. Dry-run stays checked unless a live recovery is intended. This never publishes."
+        description: "Type RUN AUTOMATION for full automation, or IMPORT NAMED STUDIES to import the fixed PubMed list. Leave empty for Research Discovery. This never publishes. Research recovery uses the separate Recover Research Drafts workflow."
         type: string
         required: false
         default: ""
@@ -94,16 +90,10 @@ jobs:
           echo "Only AUTO_DRAFT records can create Sanity drafts. REVIEW_CANDIDATE records are never written."
           echo "Published: 0"
           if [ "$CONFIRM_AUTOMATION" = "RECOVER RESEARCH DRAFTS" ]; then
-            echo "Mode: recover existing Research drafts 42925061 and 42923131. Discovery is not run. English drafts are not created. Nothing is published."
-            if [ "$WRITE_DRAFTS" = "true" ]; then
-              echo "Recovery dry_run: false"
-              RECOVER_CONFIRM="RECOVER RESEARCH DRAFTS" npm run research:recover -- --write
-            else
-              echo "Recovery dry-run. No OpenAI calls and no Sanity writes."
-              echo "Recovery dry_run: true"
-              RECOVER_CONFIRM="RECOVER RESEARCH DRAFTS" npm run research:recover -- --dry-run
-            fi
-            exit $?
+            echo "Research recovery is a separate workflow and is not run from Research Discovery."
+            echo "This run stopped before any Sanity write."
+            echo "Published: 0"
+            exit 1
           fi
           if [ "$CONFIRM_AUTOMATION" = "IMPORT NAMED STUDIES" ]; then
             echo "Mode: named study import. Creates unpublished English drafts, enriches them, and creates Hebrew drafts. Nothing is published."

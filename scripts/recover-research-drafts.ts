@@ -84,9 +84,9 @@ async function main() {
   }));
   const plans = planResearchRecovery(studies);
 
-  console.log(`Recovery targets: ${RECOVERY_PMIDS.join(", ")}`);
-  console.log("PMID 42948631 is not a recovery target.");
   console.log(args.dryRun ? "Recovery dry_run: true" : "Recovery dry_run: false");
+  console.log(`Recovery targets: ${RECOVERY_PMIDS.join(", ")}`);
+  console.log("PMID 42948631 touched: no");
 
   if (!args.dryRun) {
     const openAiKey = process.env.OPENAI_API_KEY?.trim();

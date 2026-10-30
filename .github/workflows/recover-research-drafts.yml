@@ -1,0 +1,88 @@
+name: Recover Research Drafts
+
+# Manual recovery for two existing English Research drafts only:
+# PMID 42925061 (drafts.research-pubmed-42925061)
+# PMID 42923131 (drafts.research-pubmed-42923131)
+# PMID 42948631 is not a target.
+# This workflow does not search PubMed, does not run Research Discovery,
+# does not create English drafts, and does not publish.
+# dry_run defaults to true. A live run requires confirm_write to be exactly
+# RECOVER RESEARCH DRAFTS, then calls research:recover --write only.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Preview the recovery without OpenAI calls or Sanity writes
+        type: boolean
+        default: true
+      confirm_write:
+        description: Type RECOVER RESEARCH DRAFTS to allow the live recovery
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    name: Research Recovery
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Recover the two Research drafts
+        env:
+          SANITY_WRITE_TOKEN: ${{ secrets.SANITY_WRITE_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          RESEARCH_AI_MODEL: ${{ vars.RESEARCH_AI_MODEL }}
+          RESEARCH_IMAGE_MODEL: ${{ vars.RESEARCH_IMAGE_MODEL }}
+          NEXT_PUBLIC_SANITY_PROJECT_ID: 8wc8eouj
+          NEXT_PUBLIC_SANITY_DATASET: production
+          NEXT_PUBLIC_SANITY_API_VERSION: "2026-09-22"
+          RECOVER_CONFIRM: RECOVER RESEARCH DRAFTS
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+          CONFIRM_WRITE: ${{ github.event.inputs.confirm_write }}
+        run: |
+          echo "Recovery targets: 42925061, 42923131"
+          echo "PMID 42948631 touched: no"
+          echo "Published: 0"
+          if [ -z "$SANITY_WRITE_TOKEN" ]; then
+            echo "SANITY_WRITE_TOKEN is missing. Recovery stopped before any OpenAI call or Sanity write."
+            exit 1
+          fi
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "OPENAI_API_KEY is missing. Recovery stopped before any OpenAI call or Sanity write."
+            exit 1
+          fi
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "Recovery dry_run: true"
+            echo "Preview only. No OpenAI calls and no Sanity writes."
+            npm run research:recover -- --dry-run
+            exit $?
+          fi
+          if [ "$DRY_RUN" != "false" ]; then
+            echo "Invalid dry_run. Expected true or false. Recovery stopped before any OpenAI call or Sanity write."
+            echo "Published: 0"
+            exit 1
+          fi
+          if [ "$CONFIRM_WRITE" != "RECOVER RESEARCH DRAFTS" ]; then
+            echo "Invalid confirmation. Live recovery requires confirm_write to be exactly: RECOVER RESEARCH DRAFTS"
+            echo "The confirmation was invalid, so this run stopped before any OpenAI call or Sanity write."
+            echo "Published: 0"
+            exit 1
+          fi
+          echo "Recovery dry_run: false"
+          npm run research:recover -- --write
+          exit $?

@@ -200,6 +200,9 @@ export function recoveryExitCode(result: RecoveryExecution): 0 | 1 {
 
 export function formatRecoveryReport(result: RecoveryExecution): string {
   const lines = [
+    `Recovery dry_run: ${result.dryRun ? "true" : "false"}`,
+    `Recovery targets: ${RECOVERY_PMIDS.join(", ")}`,
+    "PMID 42948631 touched: no",
     result.dryRun ? "Recovery dry-run plan" : "Recovery live result",
     "PubMed discovery is not run. English drafts are not created.",
     `OpenAI calls: ${result.openAiCalls}`,
@@ -216,19 +219,26 @@ export function formatRecoveryReport(result: RecoveryExecution): string {
     lines.push(
       `PMID ${study.pmid}`,
       `English draft: ${study.englishDraftId ?? "missing"}`,
-      `Sanity document state: ${study.documentState}`,
+      `document state: ${study.documentState}`,
       `publishedAt field: ${study.publishedAtField}`,
-      `Published counterpart: ${study.publishedCounterpart}`,
-      `Enrichment: ${study.enrichment}`,
-      `Image: ${study.imageResult}${study.imageError ? ` (${study.imageError})` : ""}`,
-      `Hebrew: ${study.hebrewResult}`,
-      `Hebrew draft: ${study.hebrewDraftId ?? "missing"}`,
+      `published counterpart: ${study.publishedCounterpart}`,
+      `enrichment result: ${study.enrichment}`,
+      `image result: ${study.imageResult}${study.imageError ? ` (${study.imageError})` : ""}`,
+      `image QA result: ${imageQaLabel(study.imageResult)}`,
+      `Hebrew result: ${study.hebrewResult}`,
+      `Hebrew draft id: ${study.hebrewDraftId ?? "missing"}`,
       `Note: ${study.reason}`,
       "",
     );
   }
 
   return lines.join("\n").trimEnd();
+}
+
+function imageQaLabel(imageResult: RecoveryStudyResult["imageResult"]): string {
+  if (imageResult === "attached") return "passed";
+  if (imageResult === "failed") return "failed";
+  return "not_run";
 }
 
 function planOne(pmid: string, documents: readonly RecoveryDocument[]): RecoveryPlan {
