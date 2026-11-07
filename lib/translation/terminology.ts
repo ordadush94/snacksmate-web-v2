@@ -88,7 +88,7 @@ export const CONTEXTUAL_REPLACEMENTS: readonly ContextualReplacement[] = [
   },
   {
     from: "הנשנוש צריך לזוז יחד איתם",
-    to: "חטיף התנועה צריך לזוז יחד איתם",
+    to: "חטיף התנועה צריך להתאים ליום",
     reason: "The exercise snack should adapt with ability, space, and time.",
   },
   {

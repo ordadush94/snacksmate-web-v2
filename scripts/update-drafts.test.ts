@@ -58,7 +58,7 @@ test("Hebrew updates read as written Hebrew and keep the English facts", () => {
   const effort = bySlug("workout-effort-rating");
   const research = bySlug("snacksmate-research-hub");
   for (const text of [release, custom, preferences, effort, research]) {
-    assert.doesNotMatch(text, /הצעד הבא בדרך להכניס|חלון ביומן|היום עוד שלם|פיצ'ר|נשנוש|לא פוסקת|אם רוצים את המעשה|מה שמחקר עשוי להביע/);
+    assert.doesNotMatch(text, /הצעד הבא בדרך להכניס|חלון ביומן|היום עוד שלם|פיצ'ר|נשנוש|לא פוסקת|אם רוצים את המעשה|מה שמחקר עשוי להביע|מקלה עליכם לשלב|לזוז יחד איתם/);
   }
   assert.match(release, /חטיף תנועה לכוח/);
   assert.match(release, /המפגשים שהושלמו/);
