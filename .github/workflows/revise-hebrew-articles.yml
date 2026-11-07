@@ -1,0 +1,82 @@
+name: Revise Hebrew Articles
+
+# SAFETY: manual only. There is no schedule.
+# Dry-run is the default. It reads the five published Hebrew Updates and writes nothing.
+# A write is possible only when mode is write AND confirm_write is exactly
+# REVISE HEBREW ARTICLES.
+# The script patches title, excerpt, SEO fields, and body on those existing articles.
+# It never publishes and it never creates a document.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: dry-run compares the published Hebrew copy. write patches those five articles and never publishes.
+        type: choice
+        options:
+          - dry-run
+          - write
+        default: dry-run
+      confirm_write:
+        description: Type REVISE HEBREW ARTICLES to allow production writes.
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  revise:
+    name: Revise Hebrew article copy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Revise Hebrew article copy
+        env:
+          NEXT_PUBLIC_SANITY_PROJECT_ID: 8wc8eouj
+          NEXT_PUBLIC_SANITY_DATASET: production
+          NEXT_PUBLIC_SANITY_API_VERSION: "2026-09-22"
+          SANITY_WRITE_TOKEN: ${{ secrets.SANITY_WRITE_TOKEN }}
+          MODE: ${{ github.event.inputs.mode }}
+          CONFIRM_WRITE: ${{ github.event.inputs.confirm_write }}
+        run: |
+          echo "Hebrew article revision is manual. It never publishes."
+          if [ -z "$SANITY_WRITE_TOKEN" ]; then
+            echo "Refusing to run. The Sanity write secret is not set."
+            echo "This run stopped before any Sanity mutation."
+            echo "Sanity writes: 0"
+            echo "Published by script: 0"
+            exit 1
+          fi
+          if [ "$MODE" = "write" ]; then
+            if [ "$CONFIRM_WRITE" != "REVISE HEBREW ARTICLES" ]; then
+              echo "Refusing to write. confirm_write must equal exactly: REVISE HEBREW ARTICLES"
+              echo "This run stopped before any Sanity mutation."
+              echo "Sanity writes: 0"
+              echo "Published by script: 0"
+              exit 1
+            fi
+            echo "Mode: write. Five Hebrew articles only. This does not publish."
+            npm run articles:revise-hebrew -- --write
+          elif [ "$MODE" = "dry-run" ]; then
+            echo "Mode: dry-run. No Sanity documents will be changed or published."
+            npm run articles:revise-hebrew
+          else
+            echo "Refusing unknown mode."
+            echo "This run stopped before any Sanity mutation."
+            echo "Sanity writes: 0"
+            echo "Published by script: 0"
+            exit 1
+          fi
