@@ -58,16 +58,35 @@ test("Hebrew updates read as written Hebrew and keep the English facts", () => {
   const effort = bySlug("workout-effort-rating");
   const research = bySlug("snacksmate-research-hub");
   for (const text of [release, custom, preferences, effort, research]) {
-    assert.doesNotMatch(text, /הצעד הבא בדרך להכניס|חלון ביומן|היום עוד שלם|פיצ'ר|נשנוש|לא פוסקת|אם רוצים את המעשה|מה שמחקר עשוי להביע|מקלה עליכם לשלב|לזוז יחד איתם/);
+    assert.doesNotMatch(text, /הצעד הבא בדרך להכניס|חלון ביומן|היום עוד שלם|פיצ'ר|נשנוש|לא פוסקת|אם רוצים את המעשה|מה שמחקר עשוי להביע|מקלה עליכם לשלב|לזוז יחד איתם|מוכן, או שלכם|גלו את מרכז המחקר/);
   }
+  const body = (slug: string) => {
+    const document = updateDrafts.find((item) => item.language === "he" && item.translationSlug === slug);
+    assert.ok(document);
+    return blockText(document.body);
+  };
+  const releaseBody = body("snacksmate-2-0-whats-new");
+  const customBody = body("custom-exercise-snacks");
+  const preferencesBody = body("exercise-preferences");
+  const effortBody = body("workout-effort-rating");
+  const researchBody = body("snacksmate-research-hub");
+  assert.match(releaseBody, /חטיף תנועה לכוח/);
+  assert.match(releaseBody, /המפגשים שהושלמו/);
+  assert.match(releaseBody, /חטיפי התנועה שצברתם/);
   assert.match(release, /חטיף תנועה לכוח/);
   assert.match(release, /המפגשים שהושלמו/);
   assert.match(release, /חטיפי התנועה שצברתם/);
+  assert.match(preferencesBody, /יעד השבועי/);
   assert.match(preferences, /יעד השבועי/);
+  assert.match(effortBody, /מאמץ מקסימלי אינו פרס/);
+  assert.match(effortBody, /קל מאוד אינו פספוס/);
   assert.match(effort, /מאמץ מקסימלי אינו פרס/);
   assert.match(effort, /קל מאוד אינו פספוס/);
+  assert.match(researchBody, /מי השתתף/);
+  assert.match(researchBody, /פעילות גופנית עצימה לסירוגין כחלק מחיי היום־יום/);
   assert.match(research, /מי השתתף/);
   assert.match(research, /פעילות גופנית עצימה לסירוגין כחלק מחיי היום־יום/);
+  assert.match(researchBody, /למרכז המחקר/);
 });
 
 test("research drafts keep the study as the source", () => {
