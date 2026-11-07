@@ -4,7 +4,8 @@ name: Revise Hebrew Articles
 # Dry-run is the default. It reads the five published Hebrew Updates and writes nothing.
 # A write is possible only when mode is write AND confirm_write is exactly
 # REVISE HEBREW ARTICLES.
-# The script patches title, excerpt, SEO fields, and body on those existing articles.
+# The script patches title, excerpt, seoTitle, seoDescription, and every body
+# block on those existing articles.
 # It never publishes and it never creates a document.
 on:
   workflow_dispatch:

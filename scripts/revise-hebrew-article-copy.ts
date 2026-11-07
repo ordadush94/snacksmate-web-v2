@@ -6,10 +6,13 @@
  *   npx tsx scripts/revise-hebrew-article-copy.ts
  *   npx tsx scripts/revise-hebrew-article-copy.ts --write
  *
- * --write patches title, excerpt, seoTitle, seoDescription, and body.
- * It patches the published Hebrew article, and the draft overlay when one
- * exists, so Studio does not keep the old wording. It does not create
- * documents and it does not publish.
+ * --write patches every reader-facing string: title, excerpt, seoTitle,
+ * seoDescription, and the full Portable Text body (every block, including
+ * headings and links). It patches the published Hebrew article, and the
+ * draft overlay when one exists, so Studio does not keep the old wording.
+ * It does not create documents and it does not publish. Image alt,
+ * references, and canonical URL stay untouched because these articles have
+ * none. The English translationReviewNote is internal and is not rewritten.
  */
 
 import { createClient, type SanityClient } from "@sanity/client";
@@ -127,7 +130,7 @@ async function main(): Promise<void> {
     }
     changed += 1;
     console.log(`Will update ${patch.id}.`);
-    console.log(`  title: ${current.title ?? ""} -> ${patch.set.title}`);
+    for (const line of fieldDiff(current, patch)) console.log(line);
   }
   console.log(`Documents that differ: ${changed}`);
   console.log("Published by script: 0");
@@ -152,6 +155,25 @@ async function main(): Promise<void> {
   }
   console.log(`Documents patched: ${patched}`);
   console.log("Published by script: 0");
+}
+
+function fieldDiff(current: ExistingArticle, patch: HebrewArticleCopyPatch): string[] {
+  const lines: string[] = [];
+  const fields = ["title", "excerpt", "seoTitle", "seoDescription"] as const;
+  for (const field of fields) {
+    if ((current[field] ?? "") !== patch.set[field]) lines.push(`  ${field}: changed`);
+  }
+  const currentBlocks = current.body ?? [];
+  const nextBlocks = patch.set.body;
+  if (blockText(currentBlocks) === blockText(nextBlocks)) return lines;
+  lines.push(`  body: ${currentBlocks.length} blocks -> ${nextBlocks.length} blocks`);
+  const count = Math.max(currentBlocks.length, nextBlocks.length);
+  for (let index = 0; index < count; index += 1) {
+    const before = blockText(currentBlocks.slice(index, index + 1));
+    const after = blockText(nextBlocks.slice(index, index + 1));
+    if (before !== after) lines.push(`    [${index}] changed`);
+  }
+  return lines;
 }
 
 function assertHebrewArticle(document: ExistingArticle, id: string): void {
