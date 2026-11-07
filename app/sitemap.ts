@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { isLocale, locales, type Locale } from "@/content/types";
 import { articlePath, articlesPath } from "@/content/articles";
 import { researchItemPath, researchPath } from "@/content/research";
+import { EXERCISE_SNACKS_APP_PATH } from "@/lib/exercise-snacks-app";
 import { absoluteUrl } from "@/lib/site";
 import {
   getPublishedArticlesForSitemap,
@@ -77,6 +78,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticEntries: MetadataRoute.Sitemap = [
     { url: absoluteUrl("/en/") },
     { url: absoluteUrl("/he/") },
+    { url: absoluteUrl(EXERCISE_SNACKS_APP_PATH) },
   ];
 
   for (const locale of locales) {

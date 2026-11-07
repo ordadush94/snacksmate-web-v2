@@ -4,12 +4,12 @@ export const enContent: LandingContent = {
   locale: "en",
   dir: "ltr",
   meta: {
-    title: "Snacksmate - Short exercise snacks for your day",
+    title: "Snacksmate App",
     description:
-      "2-5 minute exercise snacks, no equipment, anywhere. Snacksmate helps you add movement to a busy day - without the gym or a free hour.",
-    ogTitle: "Snacksmate",
+      "Snacksmate is an app for short movement breaks on a busy day. A few minutes, no equipment, at home, at work, or on a break.",
+    ogTitle: "Snacksmate App",
     ogDescription:
-      "Short exercise snacks throughout your day. No equipment. Anywhere. Download now.",
+      "Short movement breaks throughout your day. No equipment. Anywhere. Download Snacksmate.",
   },
   languageSwitcherAria: "Language",
   nav: {
@@ -47,6 +47,12 @@ export const enContent: LandingContent = {
     heading:
       "Exercise snacks are short, focused bursts of activity that fit easily into your day.",
     lead: "Instead of waiting for a long workout, you sprinkle short movement breaks throughout the day - usually 1-5 minutes, from light to high intensity. Almost anywhere, often with no equipment.",
+    appLink: {
+      before: "Snacksmate is an",
+      label: "exercise snacks app",
+      after: "for days that are already full.",
+      href: "/en/exercise-snacks-app/",
+    },
     chips: ["2-5 minutes", "Anywhere", "No equipment", "Instant win"],
     highlight: "Small snacks. Big impact.",
   },

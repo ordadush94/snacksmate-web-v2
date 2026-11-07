@@ -62,6 +62,12 @@ export type LandingContent = {
     lead: string;
     chips: string[];
     highlight: string;
+    appLink?: {
+      before: string;
+      label: string;
+      after: string;
+      href: string;
+    };
   };
   effects: {
     kicker: string;

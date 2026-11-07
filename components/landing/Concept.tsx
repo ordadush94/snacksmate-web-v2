@@ -17,6 +17,16 @@ export function Concept({ content }: ConceptProps) {
           </Reveal>
           <Reveal as="p" className="section-lead">
             {content.lead}
+            {content.appLink ? (
+              <>
+                {" "}
+                {content.appLink.before}{" "}
+                <a className="text-link" href={content.appLink.href}>
+                  {content.appLink.label}
+                </a>{" "}
+                {content.appLink.after}
+              </>
+            ) : null}
           </Reveal>
           <Reveal className="chips">
             {content.chips.map((chip) => (
