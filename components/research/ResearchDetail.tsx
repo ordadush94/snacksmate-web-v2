@@ -20,6 +20,7 @@ import {
   researchReaderTitle,
   stripEditorialLabels,
 } from "@/lib/research-display";
+import { exerciseSnacksAppTopicLink } from "@/lib/exercise-snacks-app";
 import { absoluteUrl } from "@/lib/site";
 import {
   researchImageAlt,
@@ -128,6 +129,13 @@ export function ResearchDetail({
     research.year,
     design,
   ].filter(Boolean);
+  const appPageLink =
+    locale === "en"
+      ? exerciseSnacksAppTopicLink({
+          topic: research.topic,
+          title: research.title,
+        })
+      : null;
 
   return (
     <PublicationShell
@@ -361,6 +369,13 @@ export function ResearchDetail({
                 {relatedArticle.title}
               </Link>
             </div>
+          ) : null}
+          {appPageLink ? (
+            <p>
+              <Link className="text-link" href={appPageLink.href}>
+                {appPageLink.label}
+              </Link>
+            </p>
           ) : null}
           <p>
             <a className="text-link" href={`/${locale}/#sm-download`}>
