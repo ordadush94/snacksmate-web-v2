@@ -46,6 +46,30 @@ test("custom snack drafts omit unconfirmed builder fields", () => {
   }
 });
 
+test("Hebrew updates read as written Hebrew and keep the English facts", () => {
+  const bySlug = (slug: string) => {
+    const document = updateDrafts.find((item) => item.language === "he" && item.translationSlug === slug);
+    assert.ok(document);
+    return publicText(document);
+  };
+  const release = bySlug("snacksmate-2-0-whats-new");
+  const custom = bySlug("custom-exercise-snacks");
+  const preferences = bySlug("exercise-preferences");
+  const effort = bySlug("workout-effort-rating");
+  const research = bySlug("snacksmate-research-hub");
+  for (const text of [release, custom, preferences, effort, research]) {
+    assert.doesNotMatch(text, /הצעד הבא בדרך להכניס|חלון ביומן|היום עוד שלם|פיצ'ר|נשנוש|לא פוסקת|אם רוצים את המעשה|מה שמחקר עשוי להביע/);
+  }
+  assert.match(release, /חטיף תנועה לכוח/);
+  assert.match(release, /המפגשים שהושלמו/);
+  assert.match(release, /חטיפי התנועה שצברתם/);
+  assert.match(preferences, /יעד השבועי/);
+  assert.match(effort, /מאמץ מקסימלי אינו פרס/);
+  assert.match(effort, /קל מאוד אינו פספוס/);
+  assert.match(research, /מי השתתף/);
+  assert.match(research, /פעילות גופנית עצימה לסירוגין כחלק מחיי היום־יום/);
+});
+
 test("research drafts keep the study as the source", () => {
   const research = updateDrafts.filter((document) => document.translationSlug === "snacksmate-research-hub");
   for (const document of research) {
