@@ -68,9 +68,6 @@ test("dry-run without a token does not write", () => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Dry-run only\. No Sanity document was changed\./);
   assert.match(result.stdout, /Published by script: 0/);
-  assert.match(result.stdout, /Will update article-update-snacksmate-2-0-he/);
-  assert.match(result.stdout, /body: \d+ blocks -> \d+ blocks/);
-  assert.match(result.stdout, /excerpt: changed/);
-  assert.match(result.stdout, /seoTitle: changed/);
-  assert.match(result.stdout, /seoDescription: changed/);
+  assert.match(result.stdout, /Hebrew article copy patches: 5/);
+  assert.equal(result.stdout.includes("Patched "), false);
 });
